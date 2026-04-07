@@ -67,12 +67,48 @@ Risk: Large sections (Item 1A Risk Factors can be 10K+ chars) will produce many 
 
 ## 2026-04-07 14:25 — Evaluation Set Design
 
-Decision: 10 golden set questions + 7 adversarial questions. Categories cover: single-company factual (4), cross-company comparison (1), temporal comparison (2), risk factors (2), refusal/adversarial (7).
+Decision: 12 golden set questions + 7 adversarial questions. Categories: single-company factual (5), cross-company comparison (1), temporal comparison (2), risk factors (2), specific-section (1), multi-product temporal (1). Adversarial: out-of-scope, injection, out-of-corpus, speculative, scope-overflow, out-of-corpus-temporal.
 
-Reasoning: Questions are grounded in verified facts from actual filings (NVDA, AAPL, TSLA, JPM, PFE, AMZN). Each golden question has exact expected values and source citations. Adversarial set covers out-of-scope, injection, out-of-corpus, speculative, and scope-overflow.
+Reasoning: Questions grounded in verified facts from actual filings (NVDA, AAPL, TSLA, JPM, PFE, AMZN, MSFT, ABBV). Each golden question has exact expected values, source doc, and difficulty rating. Expanded from 10 to 12 after eval-writer agent review.
 
-Alternative considered: 15+ questions — rejected per REQUIREMENTS.md guidance (4-hour build, quality over quantity). Also considered synthetic questions — rejected because real corpus-grounded questions are more trustworthy for eval.
+Alternative considered: 15+ questions — rejected per REQUIREMENTS.md guidance (4-hour build, quality over quantity).
 
-Risk: Small eval set may miss failure modes. Mitigation: adversarial set specifically targets known RAG weaknesses.
+Risk: Small eval set may miss failure modes. Mitigation: adversarial set specifically targets known RAG weaknesses. Added near-miss temporal test as recommended by skeptic.
+
+---
+
+## 2026-04-07 15:00 — Confidence Threshold Reconciliation
+
+Decision: Set CONFIDENCE_THRESHOLD to 0.0 (no hard RRF threshold). Let generation handle uncertainty via cite-or-refuse prompt. CLAUDE.md's 0.70 threshold applies to generation confidence output, not retrieval score filtering.
+
+Reasoning: REQUIREMENTS.md P2-4 explicitly says "Do NOT hard-filter on RRF scores. Return top-k results. Let generation handle uncertainty." RRF fusion scores are not comparable to cosine similarity — a hard threshold would reject good results. The 0.70 value in CLAUDE.md applies to the LLM's self-reported confidence in the answer, which the generation prompt enforces.
+
+Alternative considered: Setting threshold at 0.70 for retrieval scores as CLAUDE.md suggests — rejected because RRF scores are not cosine similarity and hard thresholds risk filtering good results.
+
+Risk: Low-quality results may reach generation. Mitigation: the generation prompt instructs refuse-if-insufficient-evidence. If empirical testing shows noise, add threshold then.
+
+---
+
+## 2026-04-07 15:05 — Config Defaults Alignment
+
+Decision: Set chunk_size=2000, chunk_overlap=200 in config.py to match CLAUDE.md and research brief. Previously was 800/100.
+
+Reasoning: Skeptic review identified mismatch between config defaults and documented thresholds. 800-char chunks would over-fragment SEC sections (~110K chunks vs ~44K at 2000). Research brief estimates are based on 2000-char target.
+
+Alternative considered: Keeping 800 — rejected because it contradicts all documentation and would degrade retrieval.
+
+Risk: None — this is a correction.
+
+---
+
+## 2026-04-07 15:10 — Scaffold Code Must Be Replaced
+
+Decision: The existing scaffold code in src/ingest.py and src/generate.py is a generic RAG starter kit and must be REPLACED with SEC-specific logic in Phase 1, not extended.
+
+Reasoning: Skeptic review identified that scaffold uses page-based citations, generic sliding-window chunking, and PDF loading — none of which match the SEC corpus. The Chunk dataclass is missing ticker/filing_type/filing_date fields. The system prompt references [doc_name, page] format which doesn't apply to .txt filings. Building on top of the scaffold would create conflicting strategies.
+
+Alternative considered: Augmenting existing code — rejected because the structural mismatch is too deep.
+
+Risk: Coder agent might try to extend rather than replace. Mitigation: documented in research brief and DECISIONS.md.
 
 ---

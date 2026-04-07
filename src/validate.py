@@ -17,16 +17,11 @@ def validate_citations(response: dict, retrieved: list[dict]) -> dict:
     if not response.get("citations"):
         return response
 
-    chunk_texts = {r["chunk"].doc_name: r["chunk"].text for r in retrieved}
-    # Also index by chunk for more granular matching
-    all_chunk_texts = [r["chunk"].text for r in retrieved]
-
     validated_citations = []
     all_valid = True
 
     for citation in response["citations"]:
         quoted = citation.get("quoted_text", "")
-        doc_name = citation.get("doc_name", "")
 
         if not quoted:
             citation["valid"] = False
@@ -37,12 +32,10 @@ def validate_citations(response: dict, retrieved: list[dict]) -> dict:
 
         # Check against all retrieved chunks
         best_score = 0.0
-        best_chunk_doc = None
         for r in retrieved:
             score = _jaccard_similarity(quoted, r["chunk"].text)
             if score > best_score:
                 best_score = score
-                best_chunk_doc = r["chunk"].doc_name
 
         # Also check for substring match (exact quote in chunk)
         substring_match = any(
@@ -89,7 +82,10 @@ def check_negation_mismatch(response: dict, retrieved: list[dict]) -> dict:
     if not answer:
         return response
 
-    negation_words = {"not", "no", "never", "none", "neither", "nor", "cannot", "doesn't", "don't", "isn't", "wasn't", "aren't", "won't"}
+    negation_words = {
+        "not", "no", "never", "none", "neither", "nor", "cannot",
+        "doesn't", "don't", "isn't", "wasn't", "aren't", "won't",
+    }
     answer_lower = answer.lower()
     answer_has_negation = any(w in answer_lower.split() for w in negation_words)
 

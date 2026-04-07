@@ -3,7 +3,6 @@
 import json
 import logging
 
-from src.config import config
 from src.telemetry import traced_llm_call
 
 logger = logging.getLogger(__name__)

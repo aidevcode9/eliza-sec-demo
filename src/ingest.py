@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from src.config import config
@@ -199,4 +199,4 @@ def run_ingestion(data_dir: str | None = None) -> list[Chunk]:
 if __name__ == "__main__":
     logging.basicConfig(level=config.log_level)
     chunks = run_ingestion()
-    print(f"Ingested {len(chunks)} chunks from {config.data_dir}")
+    logger.info(f"Ingested {len(chunks)} chunks from {config.data_dir}")

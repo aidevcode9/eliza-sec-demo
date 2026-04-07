@@ -11,7 +11,7 @@ class Config:
     # --- LLM ---
     llm_provider: str = os.getenv("LLM_PROVIDER", "openai")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    model_id: str = os.getenv("MODEL_ID", "gpt-4o-mini")
+    model_id: str = os.getenv("MODEL_ID", "gpt-5.4-mini")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
     embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
 
@@ -21,8 +21,8 @@ class Config:
     # Return top-k results and let the generation prompt handle uncertainty.
     # Only enable threshold if empirical testing proves noise in top-k results.
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.0"))
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", "800"))
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "100"))
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "2000"))
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 
     # --- Citation validation ---
     jaccard_threshold: float = float(os.getenv("JACCARD_THRESHOLD", "0.30"))

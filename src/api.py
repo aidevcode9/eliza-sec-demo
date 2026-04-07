@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from src.config import config
-from src.ingest import load_chunks, Chunk
+from src.ingest import Chunk, load_chunks
 from src.pipeline import ask
 from src.telemetry import get_call_log
 

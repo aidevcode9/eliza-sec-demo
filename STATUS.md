@@ -38,7 +38,7 @@ _Only list what has been verified end-to-end._
 - [x] XBRL boundary identified: "UNITED STATES" marker works for 100% of files
 - [x] Section headers mapped: 10-K Items 1-16, 10-Q Items 1-6 (Part I/II)
 - [x] Filename patterns documented: two variants, both parseable
-- [x] Golden eval set: 10 real questions with verified expected answers
+- [x] Golden eval set: 12 real questions with verified expected answers
 - [x] Adversarial eval set: 7 questions (injection, out-of-scope, speculative)
 - [x] DECISIONS.md updated with 6 timestamped entries
 

@@ -2,10 +2,10 @@
 
 import logging
 
-from src.ingest import Chunk, load_chunks
-from src.retrieve import retrieve
 from src.generate import generate_answer
-from src.validate import validate_citations, check_negation_mismatch
+from src.ingest import Chunk
+from src.retrieve import retrieve
+from src.validate import check_negation_mismatch, validate_citations
 
 logger = logging.getLogger(__name__)
 
