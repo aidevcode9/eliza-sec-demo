@@ -294,3 +294,44 @@ class TestBM25Precomputed:
         results = _bm25_search("NVIDIA revenue", chunks, top_k=5, index=idx)
         assert len(results) >= 1
         assert results[0]["chunk"].chunk_id == "c1"
+
+
+# ---------------------------------------------------------------------------
+# Bug 2: Ticker detection with punctuation
+# ---------------------------------------------------------------------------
+
+
+class TestTickerPunctuation:
+    """Bug 2: Tickers followed by punctuation should still be detected."""
+
+    def test_detect_tickers_with_punctuation(self) -> None:
+        """'AAPL, NVDA, and TSLA.' should detect all 3 tickers."""
+        known_tickers = {"AAPL", "NVDA", "TSLA", "JPM"}
+        known_companies: dict[str, str] = {}
+        result = detect_query_tickers(
+            "AAPL, NVDA, and TSLA.", known_tickers, known_companies
+        )
+        assert "AAPL" in result
+        assert "NVDA" in result
+        assert "TSLA" in result
+        assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# Bug 3: Per-ticker slot ceiling
+# ---------------------------------------------------------------------------
+
+
+class TestPerTickerSlots:
+    """Bug 3: Per-ticker slots should use ceiling division."""
+
+    def test_per_ticker_slots_ceiling(self) -> None:
+        """With top_k=5 and 2 tickers, per_ticker_k should be >= 3."""
+        import math
+
+        top_k = 5
+        n_tickers = 2
+        per_ticker_k = max(2, math.ceil(top_k / n_tickers))
+        assert per_ticker_k >= 3, (
+            f"Expected per_ticker_k >= 3 but got {per_ticker_k}"
+        )

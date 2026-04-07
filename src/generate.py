@@ -50,10 +50,23 @@ def generate_answer(question: str, retrieved: list[dict]) -> dict:
         label="generate_answer",
     )
 
+    # Bug 1 fix: handle null content from LLM
+    if result.get("content") is None:
+        logger.error("LLM returned null content")
+        return {
+            "answer": None,
+            "citations": [],
+            "confidence": "low",
+            "refusal_reason": "System error: LLM returned no content.",
+        }
+
     try:
         parsed = json.loads(result["content"])
     except (json.JSONDecodeError, TypeError):
-        logger.error(f"Failed to parse LLM response as JSON: {result['content'][:200]}")
+        logger.error(
+            "Failed to parse LLM response as JSON: %s",
+            str(result.get("content", ""))[:200],
+        )
         return {
             "answer": None,
             "citations": [],
@@ -66,6 +79,19 @@ def generate_answer(question: str, retrieved: list[dict]) -> dict:
     parsed.setdefault("citations", [])
     parsed.setdefault("confidence", "low")
     parsed.setdefault("refusal_reason", None)
+
+    # Normalize confidence to lowercase to prevent case-mismatch bypass
+    parsed["confidence"] = str(parsed.get("confidence", "low")).lower().strip()
+
+    # Confidence backstop: low confidence with an answer → force refusal
+    if parsed["confidence"] == "low" and parsed.get("answer") is not None:
+        logger.warning("Confidence backstop triggered: forcing refusal for low-confidence answer")
+        parsed["answer"] = None
+        parsed["citations"] = []
+        parsed["refusal_reason"] = (
+            parsed.get("refusal_reason")
+            or "Insufficient confidence to provide a reliable answer."
+        )
 
     # Add telemetry metadata
     parsed["_telemetry"] = {

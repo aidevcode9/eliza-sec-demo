@@ -70,8 +70,10 @@ def detect_query_tickers(
     query_lower = query.lower()
 
     # Check explicit tickers (case-sensitive upper match in text)
+    # Bug 2 fix: strip punctuation from tokens so "AAPL," matches "AAPL"
+    cleaned_tokens = [w.strip(".,;:!?()[]{}\"'") for w in query_upper.split()]
     for ticker in known_tickers:
-        if ticker in query_upper.split():
+        if ticker in cleaned_tokens:
             found.add(ticker)
 
     # Check company names (case-insensitive)
@@ -463,7 +465,8 @@ def _multi_company_retrieve(
     Allocates top_k slots evenly across detected tickers, retrieves
     per-ticker, then merges and re-ranks by score.
     """
-    per_ticker_k = max(2, top_k // len(tickers))
+    # Bug 3 fix: use ceiling division to avoid losing slots
+    per_ticker_k = max(2, math.ceil(top_k / len(tickers)))
     all_results: list[dict] = []
 
     for ticker in tickers:

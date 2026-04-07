@@ -132,5 +132,17 @@
     "difficulty": "hard",
     "multi_chunk": true,
     "notes": "Humira declined from $14,404M (2023) to $8,993M (2024), down 37.6%. Skyrizi grew from $7,763M to $11,718M (+50.9%). Rinvoq grew from $3,969M to $5,971M (+50.4%). Combined Skyrizi+Rinvoq growth ($5,957M) more than offset Humira decline ($5,411M)."
+  },
+  {
+    "id": "GS-013",
+    "question": "What was Uber's total gross bookings for fiscal year 2024?",
+    "expected_answer_contains": [],
+    "expected_source_doc": null,
+    "expected_page": null,
+    "expected_section": null,
+    "category": "expected-refusal",
+    "difficulty": "easy",
+    "expected_behavior": "refusal",
+    "notes": "UBER is NOT in the corpus. System must refuse rather than hallucinate. Tests cite-or-refuse on out-of-corpus company."
   }
 ]

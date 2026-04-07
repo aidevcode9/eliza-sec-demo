@@ -218,3 +218,75 @@ Reasoning: Enables fast iteration on retrieval quality without waiting for LLM g
 Alternative considered: Adding retrieval checks to the existing golden set runner — rejected because it would slow down the full eval loop and conflate two concerns.
 
 Risk: None — additive feature, does not change existing eval behavior.
+
+---
+
+## 2026-04-07 19:00 — Bug Fix: Null Model Output Crash (generate.py)
+
+Decision: Added explicit null check for `result.get("content") is None` before `json.loads()`, and changed error logging to use `str(result.get('content', ''))[:200]` instead of `result['content'][:200]`.
+
+Reasoning: If the LLM returns content=None, `json.loads(None)` raises TypeError, and the except block's `result['content'][:200]` also fails with TypeError on None[:200], causing an unhandled 500 error.
+
+Alternative considered: Wrapping in a broader try/except — rejected because it would mask the root cause. Explicit null check is clearer.
+
+Risk: None — purely defensive.
+
+---
+
+## 2026-04-07 19:01 — Bug Fix: Ticker Detection Misses Punctuated Queries (retrieve.py)
+
+Decision: Precompute cleaned tokens by stripping punctuation (`[w.strip(".,;:!?()[]{}\"'") for w in query_upper.split()]`) before ticker matching.
+
+Reasoning: Query "AAPL, NVDA, and TSLA." splits into ["AAPL,", "NVDA,", "and", "TSLA."] — none match clean ticker strings. Stripping punctuation fixes this.
+
+Alternative considered: Regex-based ticker extraction — rejected as overkill; the existing split-and-strip approach is simpler and sufficient.
+
+Risk: None — only affects ticker detection, which was broken for punctuated queries.
+
+---
+
+## 2026-04-07 19:02 — Bug Fix: Per-Ticker Slots Undercounted (retrieve.py)
+
+Decision: Changed `top_k // len(tickers)` to `math.ceil(top_k / len(tickers))` for per-ticker slot allocation in multi-company retrieval.
+
+Reasoning: Integer division loses remainder slots. With top_k=5 and 2 tickers, floor division gives 2 per ticker = 4 total (1 slot wasted). Ceiling division gives 3 per ticker, and the final `[:top_k]` trim handles the excess.
+
+Alternative considered: Distributing remainder slots round-robin — rejected as unnecessarily complex. Ceiling + trim is simpler.
+
+Risk: Slightly more chunks retrieved per ticker than strictly needed. Acceptable since the final trim enforces top_k.
+
+---
+
+## 2026-04-07 19:03 — Confidence Backstop (generate.py)
+
+Decision: After parsing LLM output, if confidence == "low" and answer is not None, force answer=None and set refusal_reason. This is the fail-closed backstop.
+
+Reasoning: The LLM may return low confidence but still provide an answer. Per project principles, confidence < threshold must result in refusal. The backstop enforces this even if the prompt instructions are not followed perfectly.
+
+Alternative considered: Relying solely on prompt instructions to refuse — rejected because LLMs can be inconsistent. Code-level enforcement is more reliable.
+
+Risk: May refuse answers that are actually correct but marked low confidence. Acceptable per fail-closed principle.
+
+---
+
+## 2026-04-07 19:04 — Prompt Iteration V3-V5
+
+Decision: Evolved system prompt from V2 to V5 with cross-company formatting, confidence calibration, injection resistance, exact-quote guidance, temporal comparison instructions, and risk factor grouping.
+
+Reasoning: V2 lacked guidance for multi-company queries, had undefined confidence levels, no injection defense, and no temporal comparison formatting rules. Each version addressed a specific gap identified in golden set testing.
+
+Alternative considered: Single large prompt rewrite — rejected in favor of incremental versions for traceable iteration history.
+
+Risk: Longer prompt increases token cost. Mitigated by keeping instructions concise and factual.
+
+---
+
+## 2026-04-07 19:05 — Golden Set GS-013: Out-of-Corpus Refusal Test
+
+Decision: Added GS-013 testing Uber (UBER), which is NOT in the corpus. Question asks for Uber's total gross bookings for FY2024.
+
+Reasoning: Need a refusal test for an out-of-corpus company. BRK and WMT are both in the corpus. UBER is definitively absent from all 54 corpus tickers.
+
+Alternative considered: Using BRK with a specific metric ("insurance float") — rejected because BRK IS in the corpus and retrieval might return tangentially related chunks, making the test less deterministic.
+
+Risk: None — UBER is verifiably absent from the corpus.
