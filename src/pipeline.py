@@ -65,7 +65,9 @@ def ask(question: str, chunks: list[Chunk] | None = None) -> dict:
     response["retrieval"] = [
         {
             "doc_name": r["chunk"].doc_name,
-            "page": r["chunk"].page,
+            "ticker": r["chunk"].ticker,
+            "filing_type": r["chunk"].filing_type,
+            "section_name": r["chunk"].section_name,
             "score": round(r["score"], 4),
             "text_preview": r["chunk"].text[:100] + "...",
         }

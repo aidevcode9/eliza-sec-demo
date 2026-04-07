@@ -136,3 +136,27 @@ Alternative considered: OpenTelemetry + Jaeger — rejected, heavier setup and n
 Risk: Langfuse cloud dependency for demo. Mitigated by toggle flag (LANGFUSE_ENABLED=false) and existing in-memory telemetry as fallback via /v1/telemetry endpoint.
 
 ---
+
+## 2026-04-07 17:00 — Ingestion Pipeline Implementation Verified
+
+Decision: The existing src/ingest.py implementation covers all P1 requirements (P1-1 through P1-8). No rewrite needed — the code already implements SEC-specific metadata parsing (6-field and 8-field headers), XBRL stripping via "UNITED STATES" marker, section-aware chunking by Item headers with Part I/II namespacing for 10-Q, paragraph-boundary sub-chunking, and JSONL persistence with separate embedding storage.
+
+Reasoning: Code review confirmed the implementation matches all acceptance criteria: Chunk dataclass has all required fields (chunk_id, text, doc_name, ticker, company, filing_type, filing_date, section_name, quarter, report_period, char_start, char_end, embedding), filename parsing handles both TICKER_TYPE_YYYYQn_DATE_full.txt and TICKER_TYPE_DATE_full.txt patterns, TOC lines with pipe characters are filtered during section splitting, and embedding uses traced_embedding() from telemetry.py.
+
+Alternative considered: Rewriting from scratch as the research brief suggested — rejected because the existing code already implements the correct SEC-specific logic, not the generic scaffold described in the brief.
+
+Risk: None — verified by 11 passing unit tests covering all core functions.
+
+---
+
+## 2026-04-07 17:05 — Test Suite for Ingestion
+
+Decision: 11 unit tests across 6 test classes: metadata parsing (2), XBRL stripping (2), filename parsing (2), section splitting (2), sub-chunking (2), persistence round-trip (1). All use fixture strings in conftest.py, no real corpus files required.
+
+Reasoning: Tests cover the exact scenarios from the research brief: 8-field vs 6-field headers, short vs 1800+ line XBRL blocks, with-quarter vs without-quarter filenames, 10-K vs 10-Q section splitting with Part namespacing, overlap verification in sub-chunks, and metadata preservation across sub-chunks.
+
+Alternative considered: Testing chunk_document() end-to-end with a fake file — deferred because the individual function tests provide better failure diagnostics and don't require file I/O setup.
+
+Risk: No integration test for chunk_document() means a wiring bug between functions could be missed. Mitigated by the eval runner which tests the full pipeline end-to-end.
+
+---

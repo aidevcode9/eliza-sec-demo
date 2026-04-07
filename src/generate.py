@@ -3,33 +3,10 @@
 import json
 import logging
 
+from src.prompts import SYSTEM_PROMPT
 from src.telemetry import traced_llm_call
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """You are a document question-answering assistant.
-
-RULES — follow these exactly:
-1. Answer ONLY based on the provided context chunks. Do not use outside knowledge.
-2. Every claim must cite the source using [doc_name, page] format.
-3. If the context does not contain enough information to answer, respond with:
-   {"answer": null, "refusal_reason": "Insufficient evidence in the provided documents.", "citations": []}
-4. Keep answers concise and factual.
-
-Respond in this exact JSON format:
-{
-  "answer": "Your answer with inline [doc, page] citations",
-  "citations": [
-    {
-      "doc_name": "document.pdf",
-      "page": 5,
-      "quoted_text": "exact short quote from the source that supports your claim"
-    }
-  ],
-  "confidence": "high" | "medium" | "low",
-  "refusal_reason": null
-}
-"""
 
 
 def generate_answer(question: str, retrieved: list[dict]) -> dict:
@@ -55,9 +32,10 @@ def generate_answer(question: str, retrieved: list[dict]) -> dict:
     context_parts = []
     for i, r in enumerate(retrieved):
         chunk = r["chunk"]
-        page_info = f", page {chunk.page}" if chunk.page else ""
+        source_info = f"{chunk.ticker} {chunk.filing_type} {chunk.filing_date}"
+        section_info = f", {chunk.section_name}" if chunk.section_name else ""
         context_parts.append(
-            f"[Chunk {i+1}] Source: {chunk.doc_name}{page_info}\n{chunk.text}"
+            f"[Chunk {i+1}] Source: {source_info}{section_info} ({chunk.doc_name})\n{chunk.text}"
         )
     context = "\n\n---\n\n".join(context_parts)
 
