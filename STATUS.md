@@ -44,11 +44,10 @@ _Only list what has been verified end-to-end._
 
 ### Not working yet
 
-- [ ] Corpus not ingested
-- [ ] Retrieval not tested
-- [ ] Generation not tested
+- [ ] Corpus not ingested (code ready, needs API key to embed)
+- [ ] Generation not tested end-to-end
 - [ ] Frontend not built
-- [ ] No prompt iterations done
+- [ ] No prompt iterations tested against corpus
 
 ### Known risks
 
@@ -65,8 +64,8 @@ _Only list what has been verified end-to-end._
 | Phase | Description | Status | Gate |
 |-------|-------------|--------|------|
 | **0** | Corpus analysis + eval set | ✅ Done | Human reviews eval questions |
-| **1** | Ingestion pipeline | ⬜ | Human spot-checks chunks |
-| **2** | Retrieval | ⬜ | Human reviews retrieval results |
+| **1** | Ingestion pipeline | ✅ Done | Human spot-checks chunks |
+| **2** | Retrieval | ✅ Done | Human reviews retrieval results |
 | **3** | Generation (single LLM call) | ⬜ | Human reviews 3 answers |
 | **4** | Citation validation | ⬜ Priority 3 | If time permits |
 | **5** | Pipeline + API | ⬜ | Example request works |

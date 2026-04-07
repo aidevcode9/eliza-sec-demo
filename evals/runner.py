@@ -155,15 +155,96 @@ def print_report(golden: dict, adversarial: dict) -> None:
     print("=" * 60 + "\n")
 
 
+def run_retrieval_check(chunks=None) -> dict:
+    """
+    Retrieval-only spot-check: verify expected source docs appear in retrieved chunks.
+
+    Runs a subset of golden set questions through retrieval only (no generation)
+    and checks that expected_source_doc is among the retrieved chunk doc_names.
+    """
+    from src.retrieve import get_or_build_index, retrieve
+
+    questions = load_eval_set("golden_set.json")
+    if not questions:
+        return {"status": "skip", "reason": "No golden set found"}
+
+    chunks = chunks or load_chunks()
+    index = get_or_build_index(chunks)
+
+    # Pick questions that have expected_source_doc
+    candidates = [q for q in questions if q.get("expected_source_doc")]
+    if not candidates:
+        return {"status": "skip", "reason": "No questions with expected_source_doc"}
+
+    results = []
+    for q in candidates:
+        retrieved = retrieve(q["question"], chunks=chunks, index=index)
+        retrieved_docs = {r["chunk"].doc_name for r in retrieved}
+        expected_doc = q["expected_source_doc"]
+
+        doc_found = any(expected_doc in d for d in retrieved_docs)
+        results.append({
+            "id": q.get("id", "?"),
+            "question": q["question"][:60],
+            "expected_doc": expected_doc,
+            "doc_found": doc_found,
+            "retrieved_count": len(retrieved),
+            "retrieved_docs": sorted(retrieved_docs)[:5],
+        })
+
+    pass_count = sum(1 for r in results if r["doc_found"])
+    total = len(results)
+    pass_rate = pass_count / total if total > 0 else 0
+
+    return {
+        "status": "pass" if pass_rate >= PASS_THRESHOLD else "fail",
+        "pass_rate": round(pass_rate, 2),
+        "passed": pass_count,
+        "total": total,
+        "results": results,
+    }
+
+
+def print_retrieval_report(report: dict) -> None:
+    """Print retrieval check results."""
+    print("\n" + "=" * 60)
+    print("RETRIEVAL CHECK")
+    print("=" * 60)
+
+    if report["status"] == "skip":
+        print(f"  Skipped: {report['reason']}")
+        return
+
+    print(f"  Status: {report['status'].upper()}")
+    print(f"  Pass rate: {report['pass_rate']:.0%} ({report['passed']}/{report['total']})")
+
+    for r in report.get("results", []):
+        status = "PASS" if r["doc_found"] else "FAIL"
+        print(f"  [{status}] {r['id']}: {r['question']}")
+        if not r["doc_found"]:
+            print(f"         Expected: {r['expected_doc']}")
+            print(f"         Got: {r['retrieved_docs']}")
+
+    print("=" * 60 + "\n")
+
+
 def main():
     """Run all evals and print report."""
     quick = "--quick" in sys.argv
+    retrieval_only = "--retrieval" in sys.argv
 
     try:
         chunks = load_chunks()
     except FileNotFoundError:
         print("ERROR: No vector store found. Run `python src/ingest.py` first.")
         sys.exit(1)
+
+    if retrieval_only:
+        report = run_retrieval_check(chunks)
+        print_retrieval_report(report)
+        if report.get("status") == "fail":
+            sys.exit(1)
+        return
 
     golden = run_golden_set(chunks)
     adversarial = run_adversarial(chunks) if not quick else {"status": "skip", "reason": "Quick mode"}

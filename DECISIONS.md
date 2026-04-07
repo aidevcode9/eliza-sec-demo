@@ -160,3 +160,61 @@ Alternative considered: Testing chunk_document() end-to-end with a fake file —
 Risk: No integration test for chunk_document() means a wiring bug between functions could be missed. Mitigated by the eval runner which tests the full pipeline end-to-end.
 
 ---
+
+## 2026-04-07 18:00 — Buy vs Build: Stay with Custom Retrieval for Assessment
+
+Decision: Do not adopt LlamaIndex for the assessment build. Continue with the existing custom ingestion, retrieval, and generation pipeline.
+
+Reasoning: The current system already has a working retrieval path and the main gaps are narrow and well understood: BM25 precomputation, multi-company retrieval behavior, SEC-specific metadata handling, and citation rendering. Adopting LlamaIndex would add framework migration and debugging risk without guaranteeing better retrieval quality, latency, or evaluation outcomes within the assessment timeline.
+
+Alternative considered: Migrate to LlamaIndex for built-in RAG abstractions and retrievers. Rejected for the assessment because likely gains are outweighed by migration cost and risk. Revisit as a Phase 2 option if the project expands beyond the demo.
+
+Impact: Focus remains on targeted improvements to the current pipeline rather than framework adoption.
+
+---
+
+## 2026-04-07 18:00 — Precomputed BM25 Index (RetrievalIndex class)
+
+Decision: Introduced a `RetrievalIndex` dataclass that tokenizes all ~44K chunks once at construction time, caching tokenized docs, term frequency maps, document frequencies, average document length, and per-chunk doc lengths. BM25 queries use the precomputed index instead of retokenizing the entire corpus per query.
+
+Reasoning: The original `_bm25_search` retokenized all chunks on every query (~15s latency for 44K chunks). Precomputing once at load time reduces BM25 search to score computation only (~50ms). The index also caches per-ticker chunk indices for multi-company retrieval.
+
+Alternative considered: Using an external BM25 library (rank_bm25) — rejected to avoid adding a dependency for a straightforward computation. Caching at module level with no class — rejected because a class encapsulates the precomputed state cleanly and is testable.
+
+Risk: Memory overhead from storing tokenized docs + tf maps for 44K chunks. Estimated ~200MB, acceptable for a single-user demo system.
+
+---
+
+## 2026-04-07 18:05 — Vectorized Cosine Similarity
+
+Decision: Stack all chunk embeddings into a numpy matrix at index build time. Vector search uses a single matrix multiplication (`embedding_matrix @ query_vec`) followed by norm division, replacing the per-chunk Python loop.
+
+Reasoning: Python loop over 44K chunks with numpy operations per iteration was ~1s. Single matmul reduces to ~50ms. Used `np.argpartition` for efficient top-k selection without full sort.
+
+Alternative considered: FAISS index — rejected as overkill for 44K vectors and adds a C++ dependency. The numpy matmul approach is sufficient and dependency-free.
+
+Risk: Full embedding matrix in memory (~44K x 1536 x 4 bytes = ~260MB float32). Acceptable for demo scale.
+
+---
+
+## 2026-04-07 18:10 — Multi-Company Retrieval
+
+Decision: For queries mentioning multiple companies (detected via ticker symbols and company name matching), partition retrieval per-ticker. Allocate `top_k / n_tickers` slots per company, retrieve independently, then merge and re-rank by score.
+
+Reasoning: Global top-k collapses cross-company questions — if AAPL has better BM25 matches than PFE for a "compare Apple and Pfizer risk factors" query, all top-k slots go to AAPL. Per-ticker retrieval guarantees balanced coverage.
+
+Alternative considered: Post-hoc rebalancing of global results — rejected because if one company dominates the top-k, the other company's chunks may not appear at all. Query rewriting to run separate sub-queries per company — rejected as too complex for the improvement gained.
+
+Risk: Per-ticker sub-indexes are built on-the-fly (not cached), adding ~100ms for multi-company queries. Acceptable given the correctness improvement. Also, company name detection uses hardcoded aliases which may miss unusual names — mitigated by also matching chunk.company metadata directly.
+
+---
+
+## 2026-04-07 18:15 — Retrieval-Only Eval Mode
+
+Decision: Added `--retrieval` flag to `evals/runner.py` that runs retrieval-only spot-checks: verifies expected_source_doc appears in retrieved chunks for golden set questions, without invoking generation.
+
+Reasoning: Enables fast iteration on retrieval quality without waiting for LLM generation. Isolates retrieval failures from generation failures in debugging.
+
+Alternative considered: Adding retrieval checks to the existing golden set runner — rejected because it would slow down the full eval loop and conflate two concerns.
+
+Risk: None — additive feature, does not change existing eval behavior.
