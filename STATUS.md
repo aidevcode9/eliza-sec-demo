@@ -75,7 +75,7 @@ _Only list what has been verified end-to-end._
 | **2** | Retrieval | ✅ Done | Human reviews retrieval results |
 | **3** | Generation (single LLM call) | ✅ Done | Human reviews 3 answers |
 | **4** | Citation validation | ⬜ Priority 3 | If time permits |
-| **5** | Pipeline + API | ⬜ | Example request works |
+| **5** | Pipeline + API | ✅ Done | Example request works |
 | **6** | Evaluation | ⬜ | Results documented honestly |
 | **7** | Frontend | ⬜ | UI question → cited answer |
 | **8** | Polish + presentation | ⬜ | All deliverables complete |

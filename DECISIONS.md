@@ -290,3 +290,15 @@ Reasoning: Need a refusal test for an out-of-corpus company. BRK and WMT are bot
 Alternative considered: Using BRK with a specific metric ("insurance float") — rejected because BRK IS in the corpus and retrieval might return tangentially related chunks, making the test less deterministic.
 
 Risk: None — UBER is verifiably absent from the corpus.
+
+---
+
+## 2026-04-07 20:00 — Langfuse Telemetry Integration + API Tests (Phase 5)
+
+Decision: Added Langfuse tracing to telemetry.py (traced_llm_call logs generations, traced_embedding logs spans) with lazy-init client guarded by config.telemetry_enabled AND non-empty langfuse_secret_key. Added shutdown_telemetry() flush hook via FastAPI lifespan. Created 4 API endpoint tests using FastAPI TestClient with mocked dependencies.
+
+Reasoning: Langfuse provides production-grade observability (cost tracking, latency, token usage per query) with minimal code. The existing traced_llm_call/traced_embedding wrappers made integration trivial — just append Langfuse calls after existing logging. Migrated api.py from deprecated on_event to lifespan context manager. API tests validate all endpoints without requiring a real vector store or LLM.
+
+Alternative considered: OpenTelemetry + Jaeger for tracing — rejected due to heavier setup and no managed UI. Keeping on_event handlers — rejected since FastAPI deprecation warnings signal future removal.
+
+Risk: Langfuse cloud dependency for demo if keys are configured. Mitigated by guard: no keys = no Langfuse calls, in-memory telemetry (/v1/telemetry) always works as fallback.

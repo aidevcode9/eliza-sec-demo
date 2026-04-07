@@ -1,5 +1,7 @@
 """Lightweight telemetry — every LLM call goes through here."""
 
+from __future__ import annotations
+
 import logging
 import time
 from typing import Any
@@ -13,6 +15,35 @@ logger = logging.getLogger(__name__)
 _client: OpenAI | None = None
 _call_log: list[dict[str, Any]] = []
 
+# ---------------------------------------------------------------------------
+# Langfuse (lazy-init, guarded by config)
+# ---------------------------------------------------------------------------
+_langfuse: Any | None = None
+
+
+def get_langfuse() -> Any | None:
+    """Return a Langfuse client, or None if disabled / unconfigured."""
+    if not config.telemetry_enabled or not config.langfuse_secret_key:
+        return None
+    global _langfuse
+    if _langfuse is None:
+        try:
+            from langfuse import Langfuse
+
+            _langfuse = Langfuse(
+                secret_key=config.langfuse_secret_key,
+                public_key=config.langfuse_public_key,
+                host=config.langfuse_host,
+            )
+        except Exception as e:
+            logger.warning("Langfuse init failed: %s", e)
+    return _langfuse
+
+
+# ---------------------------------------------------------------------------
+# OpenAI client
+# ---------------------------------------------------------------------------
+
 
 def get_client() -> OpenAI:
     """Lazy-init OpenAI client."""
@@ -20,6 +51,11 @@ def get_client() -> OpenAI:
     if _client is None:
         _client = OpenAI(api_key=config.openai_api_key)
     return _client
+
+
+# ---------------------------------------------------------------------------
+# Traced LLM call
+# ---------------------------------------------------------------------------
 
 
 def traced_llm_call(
@@ -65,12 +101,34 @@ def traced_llm_call(
             f"{result['tokens_in']}in/{result['tokens_out']}out — "
             f"{result['latency_ms']}ms"
         )
+
+        # --- Langfuse trace ---
+        lf = get_langfuse()
+        if lf:
+            try:
+                trace = lf.trace(name=label)
+                trace.generation(
+                    name=label,
+                    model=model,
+                    input=messages,
+                    output=result["content"],
+                    usage={"input": result["tokens_in"], "output": result["tokens_out"]},
+                    metadata={"latency_ms": result["latency_ms"]},
+                )
+            except Exception as e:
+                logger.warning("Langfuse generation logging failed: %s", e)
+
         return result
 
     except Exception as e:
         latency_ms = (time.time() - start) * 1000
         logger.error(f"[{label}] LLM call failed after {latency_ms:.0f}ms: {e}")
         raise
+
+
+# ---------------------------------------------------------------------------
+# Traced embedding
+# ---------------------------------------------------------------------------
 
 
 def traced_embedding(texts: list[str], label: str = "embed") -> list[list[float]]:
@@ -93,7 +151,27 @@ def traced_embedding(texts: list[str], label: str = "embed") -> list[list[float]
         "count": len(texts),
         "latency_ms": round(latency_ms, 1),
     })
+
+    # --- Langfuse span ---
+    lf = get_langfuse()
+    if lf:
+        try:
+            trace = lf.trace(name=label)
+            trace.span(
+                name=label,
+                input={"text_count": len(texts)},
+                output={"embedding_count": len(embeddings)},
+                metadata={"latency_ms": round(latency_ms, 1)},
+            )
+        except Exception as e:
+            logger.warning("Langfuse embedding span logging failed: %s", e)
+
     return embeddings
+
+
+# ---------------------------------------------------------------------------
+# Call log accessors
+# ---------------------------------------------------------------------------
 
 
 def get_call_log() -> list[dict[str, Any]]:
@@ -104,3 +182,17 @@ def get_call_log() -> list[dict[str, Any]]:
 def reset_call_log() -> None:
     """Clear the call log (useful between eval runs)."""
     _call_log.clear()
+
+
+# ---------------------------------------------------------------------------
+# Shutdown
+# ---------------------------------------------------------------------------
+
+
+def shutdown_telemetry() -> None:
+    """Flush Langfuse buffer on shutdown."""
+    if _langfuse is not None:
+        try:
+            _langfuse.flush()
+        except Exception as e:
+            logger.warning("Langfuse flush failed: %s", e)

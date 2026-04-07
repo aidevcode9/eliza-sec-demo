@@ -4,7 +4,7 @@ import logging
 
 from src.generate import generate_answer
 from src.ingest import Chunk
-from src.retrieve import retrieve
+from src.retrieve import RetrievalIndex, retrieve
 from src.validate import check_negation_mismatch, validate_citations
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,11 @@ INJECTION_PATTERNS = [
 ]
 
 
-def ask(question: str, chunks: list[Chunk] | None = None) -> dict:
+def ask(
+    question: str,
+    chunks: list[Chunk] | None = None,
+    index: RetrievalIndex | None = None,
+) -> dict:
     """
     Full RAG pipeline: inject check → retrieve → generate → validate.
 
@@ -40,7 +44,7 @@ def ask(question: str, chunks: list[Chunk] | None = None) -> dict:
         }
 
     # Step 2: Retrieve
-    results = retrieve(question, chunks=chunks)
+    results = retrieve(question, chunks=chunks, index=index)
 
     if not results:
         return {

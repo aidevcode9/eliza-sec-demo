@@ -2,6 +2,16 @@
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env from project root (or src/.env as fallback)
+_project_root = Path(__file__).resolve().parent.parent
+for _env_path in [_project_root / ".env", _project_root / "src" / ".env"]:
+    if _env_path.exists():
+        load_dotenv(_env_path)
+        break
 
 
 @dataclass
@@ -34,6 +44,11 @@ class Config:
     # --- Telemetry ---
     telemetry_enabled: bool = os.getenv("TELEMETRY_ENABLED", "true").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+
+    # --- Langfuse ---
+    langfuse_secret_key: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    langfuse_public_key: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    langfuse_host: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
 
 config = Config()
