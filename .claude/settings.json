@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreCommit": [
+      {
+        "command": "uv run ruff check src/ && uv run python -m py_compile src/config.py src/ingest.py src/retrieve.py src/generate.py src/validate.py src/pipeline.py src/api.py",
+        "description": "Lint + syntax check before commit",
+        "blocking": true
+      }
+    ],
+    "PostEditPython": [
+      {
+        "command": "uv run ruff check --fix ${file}",
+        "description": "Auto-fix lint on save",
+        "blocking": false
+      }
+    ],
+    "PrePush": [
+      {
+        "command": "uv run python evals/runner.py --quick",
+        "description": "Quick eval gate before push",
+        "blocking": true
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "read",
+      "write",
+      "execute"
+    ],
+    "deny": [
+      "delete data/*"
+    ]
+  }
+}

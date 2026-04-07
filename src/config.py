@@ -1,0 +1,39 @@
+"""Configuration — all thresholds and settings in one place."""
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass
+class Config:
+    """Assignment configuration. Tune thresholds here, not in code."""
+
+    # --- LLM ---
+    llm_provider: str = os.getenv("LLM_PROVIDER", "openai")
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    model_id: str = os.getenv("MODEL_ID", "gpt-4o-mini")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
+    embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
+
+    # --- Retrieval ---
+    top_k: int = int(os.getenv("TOP_K", "5"))
+    # NOTE: Do NOT hard-filter on RRF fusion scores. They are not comparable to cosine similarity.
+    # Return top-k results and let the generation prompt handle uncertainty.
+    # Only enable threshold if empirical testing proves noise in top-k results.
+    confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.0"))
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "800"))
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "100"))
+
+    # --- Citation validation ---
+    jaccard_threshold: float = float(os.getenv("JACCARD_THRESHOLD", "0.30"))
+
+    # --- Paths ---
+    data_dir: str = os.getenv("DATA_DIR", "data")
+    vector_store_path: str = os.getenv("VECTOR_STORE_PATH", "vector_store")
+
+    # --- Telemetry ---
+    telemetry_enabled: bool = os.getenv("TELEMETRY_ENABLED", "true").lower() == "true"
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+
+
+config = Config()

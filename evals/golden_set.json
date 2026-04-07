@@ -1,0 +1,10 @@
+[
+  {
+    "id": "GS-001",
+    "question": "REPLACE: Write a question answerable from the corpus",
+    "expected_answer_contains": ["key phrase from expected answer"],
+    "expected_source_doc": "document_name.pdf",
+    "expected_page": null,
+    "category": "factual"
+  }
+]
