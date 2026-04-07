@@ -188,6 +188,19 @@ def split_sections(text: str, filing_type: str) -> list[dict[str, Any]]:
     For 10-Q, tracks current Part (I/II) for namespacing.
     Returns list of {"section_name": str, "text": str, "char_start": int, "char_end": int}.
     """
+    # Pre-normalize: insert newlines before Item headers that appear mid-line.
+    # SEC .txt files often have sections concatenated on single long lines
+    # with patterns like "35Table of ContentsItem 7." or "applicable.Item 1B."
+    # Break before Item headers that follow:
+    #   - a digit (page number): "35Item 7."
+    #   - "Table of Contents": "Table of ContentsItem 7."
+    #   - a period: "applicable.Item 1B."
+    #   - "Part I" or "Part II": "Part IItem 1."
+    text = re.sub(r"(\d)((?:Item|ITEM)\s*\d+[A-C]?\.?\s)", r"\1\n\2", text)
+    text = re.sub(r"(Table of Contents)((?:Item|ITEM)\s*\d+[A-C]?\.?\s)", r"\1\n\2", text)
+    text = re.sub(r"(\.)(?=(?:Item|ITEM)\s*\d+[A-C]?\.?\s)", r".\n", text)
+    # Also insert newlines before Part headers mid-line
+    text = re.sub(r"(?<=\S)((?:PART|Part)\s+(?:I{1,2}|[12])\b)", r"\n\1", text)
     lines = text.split("\n")
     sections: list[dict[str, Any]] = []
     current_part: str = ""

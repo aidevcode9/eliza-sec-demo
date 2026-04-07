@@ -31,7 +31,7 @@ class Config:
     # Return top-k results and let the generation prompt handle uncertainty.
     # Only enable threshold if empirical testing proves noise in top-k results.
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.0"))
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", "2000"))
+    chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 
     # --- Citation validation ---

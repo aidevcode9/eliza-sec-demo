@@ -424,7 +424,17 @@ def retrieve(
             query, chunks, top_k, threshold, index, detected_tickers
         )
 
-    # Single-company / global retrieval
+    if len(detected_tickers) == 1:
+        # Single-ticker: filter chunks to that company for focused retrieval
+        ticker = detected_tickers[0]
+        ticker_indices = index.ticker_to_indices.get(ticker, [])
+        if ticker_indices:
+            ticker_chunks = [chunks[i] for i in ticker_indices]
+            sub_index = RetrievalIndex(ticker_chunks)
+            logger.info("Single-ticker retrieval: %s (%d chunks)", ticker, len(ticker_chunks))
+            return _single_retrieve(query, ticker_chunks, top_k, threshold, sub_index)
+
+    # No ticker detected — global retrieval
     return _single_retrieve(query, chunks, top_k, threshold, index)
 
 

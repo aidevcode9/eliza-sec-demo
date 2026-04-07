@@ -86,7 +86,9 @@ If phase 1 proves the trust bar is met, here's what we'd propose next:
 
 **Cross-document analysis** — "Compare NVIDIA's risk factors across 2023, 2024, and 2025." Requires retrieval across multiple filings for the same company with temporal awareness.
 
-**Telemetry dashboard** — Production monitoring of query quality, latency, cost, and refusal rates. Ensures the system maintains trust bar over time.
+**Hierarchical retrieval** — Two-stage coarse-to-fine retrieval: keep 2000-char coarse chunks for broad context, add query-time fine-span extraction (350-700 chars) with lexical reranking for fact-heavy questions. Eliminates the need for small global chunks while precisely surfacing specific metrics (revenue figures, asset totals). Designed but deferred from the assessment build due to time constraints.
+
+**Telemetry dashboard** — Production monitoring of query quality, latency, cost, and refusal rates via Langfuse (already instrumented). Ensures the system maintains trust bar over time.
 
 **Estimated phase 2 scope:** 4-6 weeks with a 2-person team.
 

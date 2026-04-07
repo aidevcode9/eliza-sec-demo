@@ -293,6 +293,88 @@ Risk: None — UBER is verifiably absent from the corpus.
 
 ---
 
+## 2026-04-07 20:30 — Section Splitting Fix: Mid-Line Item Headers
+
+Decision: Add pre-normalization regex in split_sections() to insert newlines before Item headers that appear mid-line. SEC .txt files concatenate sections on single long lines (e.g., "35Table of ContentsItem 7. Management's Discussion..."). Without this fix, split_sections() found 0-1 sections per filing. Pattern: break before Item headers preceded by digits (page numbers) or "Table of Contents".
+
+Reasoning: Root cause of retrieval failure for NVDA revenue question — the entire filing was one "Full Document" chunk because no sections were detected. The XBRL-to-text conversion produces long lines where sections are concatenated.
+
+Alternative considered: Using re.split() on the full text instead of line-by-line — rejected because the line-by-line approach with pre-normalization is simpler and preserves the TOC-filtering logic.
+
+Risk: May still miss some section boundaries where the preceding text doesn't match digit or "Table of Contents" patterns. Acceptable for demo — covers the primary pattern observed across NVDA, AAPL, JPM, TSLA files.
+
+---
+
+## 2026-04-07 20:35 — Chunk Size: Reduce to 1000 for Demo
+
+Decision: Set CHUNK_SIZE=1000 (in .env) for the assessment demo. Keep the code default at 1000 in config.py. Previous value was 2000.
+
+Reasoning: At 2000-char chunks, the NVDA Item 7 revenue summary ($130.5B) lands at position 1603/1910 in a chunk that starts with "manufacturing costs, employee wages..." — the embedding is dominated by irrelevant content and both BM25 and vector search fail to rank it in top-10. At 1000 chars, the revenue sentence gets a dedicated chunk with a focused embedding, and retrieval succeeds.
+
+Alternative considered: Hierarchical two-stage retrieval (coarse 2000-char recall → fine 350-700 char span extraction with lexical reranking). This is architecturally superior but costs ~1.5-2 hours to implement, risking Phases 6-8 delivery. Deferred to post-demo roadmap. See ROADMAP section below.
+
+Risk: Doubling chunk count (~8K → ~19K for 6 companies, ~88K for full corpus) increases embedding cost and retrieval latency. Acceptable for demo scale. Monitor if full-corpus latency is problematic.
+
+---
+
+## 2026-04-07 20:40 — Single-Ticker Filtering in Retrieval
+
+Decision: When exactly one ticker is detected in a query, filter chunks to that company before running vector + BM25 search. Previously only multi-company queries (2+ tickers) triggered per-ticker filtering.
+
+Reasoning: A query about "NVIDIA revenue" was searching all 8,308 chunks globally. NVDA revenue chunks competed against all other companies' chunks, diluting relevance. With single-ticker filtering, the search space narrows to ~1,500 NVDA chunks, dramatically improving BM25 and vector ranking.
+
+Alternative considered: Increasing top_k globally — rejected because it increases token cost in generation without addressing the root ranking problem.
+
+Risk: If ticker detection fails (e.g., user says "the chipmaker" instead of "NVIDIA"), falls back to global search. Acceptable — alias matching covers common company names.
+
+---
+
+## ROADMAP — Hierarchical Chunking / Retrieval (Post-Demo)
+
+**Status: Designed, not implemented. Deferred to Phase 2 production build.**
+
+### Problem
+At 2000-char chunks, fact-heavy sentences (revenue figures, specific metrics) land deep inside chunks where embeddings and BM25 scores are diluted by surrounding text. The current fix (CHUNK_SIZE=1000) works but doubles the index size and doesn't scale well for production.
+
+### Proposed Architecture: Two-Stage Coarse-to-Fine Retrieval
+
+**Stage 1 — Coarse Recall:**
+- Widen initial pool to top-20 from each method (BM25 + vector) before RRF fusion
+- Keep current per-ticker branching for multi-company queries
+- Apply widened pool inside each ticker branch before merging
+
+**Stage 2 — Fine-Span Extraction:**
+- Take Stage 1 coarse candidates
+- Expand each candidate with same-doc/same-section neighbors (deduplicated by char_start/char_end)
+- Construct fine spans: 350-700 chars, prefer paragraph/newline boundaries, sentence-window fallback
+- No second embedding API call — lexical reranking only
+
+**Fine Reranker:**
+- Query token coverage as main signal
+- Bonuses for finance phrases (revenue, net income, total assets, fiscal year)
+- Bonus for explicit year matches (2024, 2025)
+- Positional bonus when matched terms appear early in span
+
+**Key Design Principles:**
+- No JSONL schema change, no re-embedding required
+- Persisted ingestion stays at 2000-char coarse chunks
+- Fine spans are query-time only, in-memory
+- Generation receives ranked items with .text + SEC metadata regardless of source (coarse or fine)
+- Debug metadata: retrieval_stage, parent_chunk_id, span_start/span_end
+
+**Test Plan:**
+- Unit: long synthetic chunk where answer appears late → recovered by fine reranking
+- Unit: answer near chunk boundary → neighbor-aware extraction recovers it
+- Regression: multi-company balanced coverage still works
+- Golden set: GS-001/007/009/010/011/012 retrieve expected source docs
+- End-to-end: NVDA revenue question stops refusing
+
+**Estimated effort:** 1.5-2 hours implementation + testing.
+
+---
+
+---
+
 ## 2026-04-07 20:00 — Langfuse Telemetry Integration + API Tests (Phase 5)
 
 Decision: Added Langfuse tracing to telemetry.py (traced_llm_call logs generations, traced_embedding logs spans) with lazy-init client guarded by config.telemetry_enabled AND non-empty langfuse_secret_key. Added shutdown_telemetry() flush hook via FastAPI lifespan. Created 4 API endpoint tests using FastAPI TestClient with mocked dependencies.
