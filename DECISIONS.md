@@ -112,3 +112,27 @@ Alternative considered: Augmenting existing code — rejected because the struct
 Risk: Coder agent might try to extend rather than replace. Mitigation: documented in research brief and DECISIONS.md.
 
 ---
+
+## 2026-04-07 16:00 — Unit Test Strategy
+
+Decision: 25 unit tests across 4 files (test_ingest, test_retrieve, test_validate, test_pipeline). Skip testing api.py, generate.py, telemetry.py, config.py.
+
+Reasoning: 4-hour build. Eval runner covers end-to-end answer quality. Unit tests cover what eval runner can't diagnose: which component broke. Skipping API (just curl it), generate (requires LLM mock, eval runner tests it e2e), telemetry (thin wrapper, tested implicitly), config (trivial dataclass).
+
+Alternative considered: Full test coverage — rejected due to time constraint. Integration tests for API — rejected because FastAPI mocking adds complexity with no demo value.
+
+Risk: Untested generate.py could have edge cases. Mitigated by eval runner golden set.
+
+---
+
+## 2026-04-07 16:05 — Langfuse Observability
+
+Decision: Add Langfuse tracing to traced_llm_call() and traced_embedding(). Include cost tracking via token counts. Toggle via LANGFUSE_ENABLED env var.
+
+Reasoning: ~40 min effort for professional observability dashboard. Existing telemetry wrappers make this trivial — just add span calls around existing try/except blocks. Cost-per-query metric demonstrates production thinking for panel.
+
+Alternative considered: OpenTelemetry + Jaeger — rejected, heavier setup and no managed UI. Custom dashboard — rejected, too much build time. No observability — rejected, misses opportunity to demonstrate production readiness.
+
+Risk: Langfuse cloud dependency for demo. Mitigated by toggle flag (LANGFUSE_ENABLED=false) and existing in-memory telemetry as fallback via /v1/telemetry endpoint.
+
+---
