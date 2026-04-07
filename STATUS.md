@@ -40,14 +40,21 @@ _Only list what has been verified end-to-end._
 - [x] Filename patterns documented: two variants, both parseable
 - [x] Golden eval set: 12 real questions with verified expected answers
 - [x] Adversarial eval set: 7 questions (injection, out-of-scope, speculative)
-- [x] DECISIONS.md updated with 6 timestamped entries
+- [x] DECISIONS.md updated with 19 timestamped entries
+- [x] Ingestion pipeline: SEC-aware chunking, XBRL stripping, metadata parsing (11 tests)
+- [x] Retrieval: precomputed BM25, vectorized search, multi-company detection (15 tests)
+- [x] Generation: prompt V5, cite-or-refuse backstop, 3 bug fixes (8 tests)
+- [x] 34 unit tests passing, lint clean
+- [x] .env.example with all environment variables
+- [x] API key scrubbed from git history
+- [x] Local test script: scripts/test_local.sh
 
 ### Not working yet
 
-- [ ] Corpus not ingested (code ready, needs API key to embed)
-- [ ] Generation not tested end-to-end
+- [ ] Corpus not ingested (code ready, needs OPENAI_API_KEY to embed)
+- [ ] Pipeline + API not wired end-to-end
 - [ ] Frontend not built
-- [ ] No prompt iterations tested against corpus
+- [ ] Eval results not generated (need ingested corpus)
 
 ### Known risks
 
@@ -66,7 +73,7 @@ _Only list what has been verified end-to-end._
 | **0** | Corpus analysis + eval set | ✅ Done | Human reviews eval questions |
 | **1** | Ingestion pipeline | ✅ Done | Human spot-checks chunks |
 | **2** | Retrieval | ✅ Done | Human reviews retrieval results |
-| **3** | Generation (single LLM call) | ⬜ | Human reviews 3 answers |
+| **3** | Generation (single LLM call) | ✅ Done | Human reviews 3 answers |
 | **4** | Citation validation | ⬜ Priority 3 | If time permits |
 | **5** | Pipeline + API | ⬜ | Example request works |
 | **6** | Evaluation | ⬜ | Results documented honestly |
@@ -79,11 +86,11 @@ _Only list what has been verified end-to-end._
 
 _Keep this brutally short and current._
 
-1. [x] Unzip corpus into data/. Analyze structure.
-2. [x] Identify XBRL boundary and section headers across filings
-3. [x] Write 10 real eval questions + 7 adversarial from actual corpus content
-4. [ ] Build ingestion: strip XBRL, chunk by section, embed
-5. [ ] Test retrieval on eval questions. Check multi-company balance.
+1. [x] Corpus analysis + eval set (Phase 0)
+2. [x] Ingestion pipeline + tests (Phase 1)
+3. [x] Retrieval with multi-company + tests (Phase 2)
+4. [x] Generation with cite-or-refuse + bug fixes (Phase 3)
+5. [ ] Pipeline + API + Langfuse (Phase 5) — or Phase 4 citation validation first
 
 ---
 
