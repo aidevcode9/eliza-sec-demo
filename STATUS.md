@@ -34,6 +34,13 @@ _Only list what has been verified end-to-end._
 - [x] DECISIONS.md and PROMPT_LOG.md ready
 - [x] pyproject.toml with uv config
 - [x] Subagents and hooks configured
+- [x] Corpus analyzed: 246 files, 54 tickers, ~79M chars after XBRL strip
+- [x] XBRL boundary identified: "UNITED STATES" marker works for 100% of files
+- [x] Section headers mapped: 10-K Items 1-16, 10-Q Items 1-6 (Part I/II)
+- [x] Filename patterns documented: two variants, both parseable
+- [x] Golden eval set: 10 real questions with verified expected answers
+- [x] Adversarial eval set: 7 questions (injection, out-of-scope, speculative)
+- [x] DECISIONS.md updated with 6 timestamped entries
 
 ### Not working yet
 
@@ -41,17 +48,15 @@ _Only list what has been verified end-to-end._
 - [ ] Retrieval not tested
 - [ ] Generation not tested
 - [ ] Frontend not built
-- [ ] Eval set is placeholder, not real
 - [ ] No prompt iterations done
 
 ### Known risks
 
 - RRF fusion scores are not cosine similarity. Hard thresholds may filter good results.
 - Retrieval may over-focus on one company for cross-company questions.
-- XBRL stripping boundary may vary across filings.
-- SEC section headers may be inconsistent across 10-K vs 10-Q.
 - Large sections (Item 1A Risk Factors) may exceed chunk size limits.
 - Citation format needs to work without page numbers (corpus is .txt).
+- Some Item headers appear as cross-references in text — anchor regex on line-start.
 
 ---
 
@@ -59,7 +64,7 @@ _Only list what has been verified end-to-end._
 
 | Phase | Description | Status | Gate |
 |-------|-------------|--------|------|
-| **0** | Corpus analysis + eval set | 🟡 Next | Human reviews eval questions |
+| **0** | Corpus analysis + eval set | ✅ Done | Human reviews eval questions |
 | **1** | Ingestion pipeline | ⬜ | Human spot-checks chunks |
 | **2** | Retrieval | ⬜ | Human reviews retrieval results |
 | **3** | Generation (single LLM call) | ⬜ | Human reviews 3 answers |
@@ -75,9 +80,9 @@ _Only list what has been verified end-to-end._
 
 _Keep this brutally short and current._
 
-1. [ ] Unzip corpus into data/. Run researcher agent.
-2. [ ] Identify XBRL boundary and section headers across filings
-3. [ ] Write 8-10 real eval questions from actual corpus content
+1. [x] Unzip corpus into data/. Analyze structure.
+2. [x] Identify XBRL boundary and section headers across filings
+3. [x] Write 10 real eval questions + 7 adversarial from actual corpus content
 4. [ ] Build ingestion: strip XBRL, chunk by section, embed
 5. [ ] Test retrieval on eval questions. Check multi-company balance.
 

@@ -1,10 +1,92 @@
 [
   {
     "id": "GS-001",
-    "question": "REPLACE: Write a question answerable from the corpus",
-    "expected_answer_contains": ["key phrase from expected answer"],
-    "expected_source_doc": "document_name.pdf",
-    "expected_page": null,
-    "category": "factual"
+    "question": "What was NVIDIA's total revenue for fiscal year 2025, and how did it compare to the prior year?",
+    "expected_answer_contains": ["130,497", "130.5 billion", "114%", "60,922"],
+    "expected_source": "NVDA_10K_2025-02-26_full.txt",
+    "expected_section": "Item 7",
+    "category": "single-company-factual",
+    "notes": "Revenue from MD&A summary table. FY2025 = $130,497M, up 114% from $60,922M."
+  },
+  {
+    "id": "GS-002",
+    "question": "How much revenue did Amazon Web Services (AWS) generate in 2024?",
+    "expected_answer_contains": ["107,556", "107.6 billion"],
+    "expected_source": "AMZN_10K_2024Q4_2025-02-07_full.txt",
+    "expected_section": "Item 8 / Segment Information",
+    "category": "single-company-factual",
+    "notes": "AWS net sales for FY2024 = $107,556M, up ~19% from $90,757M in 2023."
+  },
+  {
+    "id": "GS-003",
+    "question": "What were Tesla's revenues by geographic region for Q1 2024?",
+    "expected_answer_contains": ["9,762", "4,592", "6,947", "21,301"],
+    "expected_source": "TSLA_10Q_2024Q1_2024-04-24_full.txt",
+    "expected_section": "Segment Information / Note 12",
+    "category": "single-company-factual",
+    "notes": "US=$9,762M, China=$4,592M, Other international=$6,947M, Total=$21,301M."
+  },
+  {
+    "id": "GS-004",
+    "question": "What are the primary risk factors facing Apple, and how are they categorized?",
+    "expected_answer_contains": ["Macroeconomic", "global and regional economic conditions", "political events", "product"],
+    "expected_source": "AAPL_10K_2024Q3_2024-11-01_full.txt",
+    "expected_section": "Item 1A",
+    "category": "risk-factors",
+    "notes": "Risks organized under Macroeconomic/Industry, Business, and Financial categories."
+  },
+  {
+    "id": "GS-005",
+    "question": "Compare JPMorgan Chase's net income and total assets for 2025 versus 2024.",
+    "expected_answer_contains": ["57,048", "58,471", "4,424,900", "4,002,814"],
+    "expected_source": "JPM_10K_2026-02-13_full.txt",
+    "expected_section": "Item 7",
+    "category": "temporal-comparison",
+    "notes": "Net income $57,048M (2025) vs $58,471M (2024), down 2%. Total assets $4,424,900M vs $4,002,814M."
+  },
+  {
+    "id": "GS-006",
+    "question": "What regulatory and competitive risks does Pfizer face according to its most recent 10-K filing?",
+    "expected_answer_contains": ["COMPETITIVE PRODUCTS", "POST-AUTHORIZATION", "GLOBAL OPERATIONS"],
+    "expected_source": "PFE_10K_2025-02-27_full.txt",
+    "expected_section": "Item 1A",
+    "category": "risk-factors",
+    "notes": "Key pharma risks: generic competition, FDA post-marketing requirements, international regulatory."
+  },
+  {
+    "id": "GS-007",
+    "question": "How does NVIDIA's revenue breakdown between its Compute & Networking segment and Graphics segment for fiscal year 2025?",
+    "expected_answer_contains": ["116,193", "14,304", "Compute & Networking", "Graphics"],
+    "expected_source": "NVDA_10K_2025-02-26_full.txt",
+    "expected_section": "Item 7 / Segment Information",
+    "category": "single-company-factual",
+    "notes": "Compute & Networking=$116,193M (+145%), Graphics=$14,304M (+6%)."
+  },
+  {
+    "id": "GS-008",
+    "question": "Compare the risk factors of Apple and Pfizer. What types of risks does each company emphasize?",
+    "expected_answer_contains": ["Apple", "Pfizer", "risk"],
+    "expected_source": "AAPL_10K_2024Q3_2024-11-01_full.txt, PFE_10K_2025-02-27_full.txt",
+    "expected_section": "Item 1A (both)",
+    "category": "cross-company-comparison",
+    "notes": "Apple: macro/geopolitical, product transitions, supply chain. Pfizer: generic competition, regulatory/FDA, global operations."
+  },
+  {
+    "id": "GS-009",
+    "question": "How has NVIDIA's revenue growth changed from fiscal year 2024 to fiscal year 2025?",
+    "expected_answer_contains": ["130,497", "60,922", "114"],
+    "expected_source": "NVDA_10K_2025-02-26_full.txt",
+    "expected_section": "Item 7",
+    "category": "temporal-comparison",
+    "notes": "FY2025 revenue $130.5B vs FY2024 $60.9B, 114% growth driven by Data Center demand."
+  },
+  {
+    "id": "GS-010",
+    "question": "What was JPMorgan Chase's total net revenue for 2025 and how did it change year over year?",
+    "expected_answer_contains": ["182,447", "177,556", "3%"],
+    "expected_source": "JPM_10K_2026-02-13_full.txt",
+    "expected_section": "Item 7",
+    "category": "single-company-factual",
+    "notes": "Total net revenue $182,447M in 2025, up 3% from $177,556M in 2024."
   }
 ]
