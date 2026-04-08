@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -92,14 +93,15 @@ def detect_query_tickers(
     return sorted(found)
 
 
-def _requested_filing_type(query: str) -> str | None:
-    """Infer a requested filing type from the query text."""
+def _requested_filing_types(query: str) -> set[str]:
+    """Infer any requested filing types from the query text."""
     query_lower = query.lower()
+    requested: set[str] = set()
     if "10-k" in query_lower or "10k" in query_lower:
-        return "10-K"
+        requested.add("10-K")
     if "10-q" in query_lower or "10q" in query_lower:
-        return "10-Q"
-    return None
+        requested.add("10-Q")
+    return requested
 
 
 def _requests_latest_filing(query: str) -> bool:
@@ -108,21 +110,42 @@ def _requests_latest_filing(query: str) -> bool:
     return any(phrase in query_lower for phrase in ("most recent", "latest", "newest"))
 
 
+def _has_explicit_period_reference(query: str) -> bool:
+    """Return True when the query names a specific historical period or filing year."""
+    return bool(re.search(r"\b20\d{2}\b", query))
+
+
 def _scope_chunks_for_query(query: str, chunks: list[Chunk]) -> list[Chunk]:
     """Narrow retrieval to the requested filing type or latest filing when explicit."""
     scoped = chunks
 
-    filing_type = _requested_filing_type(query)
-    if filing_type is not None:
-        type_filtered = [chunk for chunk in scoped if chunk.filing_type.upper() == filing_type]
+    filing_types = _requested_filing_types(query)
+    if filing_types:
+        type_filtered = [chunk for chunk in scoped if chunk.filing_type.upper() in filing_types]
         if type_filtered:
             scoped = type_filtered
 
-    if _requests_latest_filing(query):
+    if _requests_latest_filing(query) and not _has_explicit_period_reference(query):
         dated_chunks = [chunk for chunk in scoped if chunk.filing_date]
         if dated_chunks:
-            latest_date = max(chunk.filing_date for chunk in dated_chunks)
-            latest_filtered = [chunk for chunk in dated_chunks if chunk.filing_date == latest_date]
+            if len(filing_types) > 1:
+                latest_by_type = {
+                    filing_type: max(
+                        chunk.filing_date
+                        for chunk in dated_chunks
+                        if chunk.filing_type.upper() == filing_type
+                    )
+                    for filing_type in filing_types
+                    if any(chunk.filing_type.upper() == filing_type for chunk in dated_chunks)
+                }
+                latest_filtered = [
+                    chunk
+                    for chunk in dated_chunks
+                    if latest_by_type.get(chunk.filing_type.upper()) == chunk.filing_date
+                ]
+            else:
+                latest_date = max(chunk.filing_date for chunk in dated_chunks)
+                latest_filtered = [chunk for chunk in dated_chunks if chunk.filing_date == latest_date]
             if latest_filtered:
                 scoped = latest_filtered
 
