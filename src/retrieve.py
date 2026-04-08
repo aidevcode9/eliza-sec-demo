@@ -394,6 +394,96 @@ def _rrf_fuse(
 
 
 # ---------------------------------------------------------------------------
+# Candidate pool + neighbor expansion
+# ---------------------------------------------------------------------------
+
+
+def _candidate_pool_size(top_k: int) -> int:
+    """Search a wider candidate pool before fusion to avoid early cutoff misses."""
+    return max(20, top_k * 5)
+
+
+def _expand_adjacent_results(
+    anchors: list[dict],
+    chunks: list[Chunk],
+    fused: list[dict],
+    max_results: int | None = None,
+) -> list[dict]:
+    """
+    Include immediate same-doc/same-section neighbors around selected hits.
+
+    This preserves local filing context for generation so a retrieved chunk can
+    bring along the adjacent answer chunk when the ranking lands one chunk away.
+    """
+    if not anchors:
+        return []
+
+    score_by_id = {r["chunk"].chunk_id: r["score"] for r in fused}
+    index_by_id = {chunk.chunk_id: i for i, chunk in enumerate(chunks)}
+    expanded: list[dict] = []
+    seen: set[str] = set()
+
+    for anchor in anchors:
+        anchor_chunk = anchor["chunk"]
+        anchor_index = index_by_id.get(anchor_chunk.chunk_id)
+        if anchor_index is None:
+            continue
+
+        neighbor_indices: list[int] = []
+        if anchor_index > 0:
+            neighbor_indices.append(anchor_index - 1)
+        neighbor_indices.append(anchor_index)
+        if anchor_index + 1 < len(chunks):
+            neighbor_indices.append(anchor_index + 1)
+
+        for candidate_index in neighbor_indices:
+            candidate_chunk = chunks[candidate_index]
+            if (
+                candidate_chunk.doc_name != anchor_chunk.doc_name
+                or candidate_chunk.section_name != anchor_chunk.section_name
+            ):
+                continue
+            if candidate_chunk.chunk_id in seen:
+                continue
+
+            seen.add(candidate_chunk.chunk_id)
+            if candidate_chunk.chunk_id == anchor_chunk.chunk_id:
+                expanded.append(anchor)
+            else:
+                expanded.append(
+                    {
+                        "chunk": candidate_chunk,
+                        "score": score_by_id.get(candidate_chunk.chunk_id, anchor["score"]),
+                        "method": "neighbor",
+                    }
+                )
+            if max_results is not None and len(expanded) >= max_results:
+                return expanded
+
+    return expanded
+
+
+def _finalize_results(
+    fused: list[dict],
+    chunks: list[Chunk],
+    top_k: int,
+    threshold: float,
+) -> list[dict]:
+    """Select top anchors above threshold, then expand with adjacent context."""
+    anchors = _select_anchor_results(fused, top_k, threshold)
+    return _expand_adjacent_results(anchors, chunks, fused, max_results=top_k * 2)
+
+
+def _select_anchor_results(
+    fused: list[dict],
+    top_k: int,
+    threshold: float,
+) -> list[dict]:
+    """Select the top fused results that pass thresholding."""
+    return [r for r in fused[:top_k] if r["score"] >= threshold]
+
+
+# ---------------------------------------------------------------------------
 # Top-level retrieve
 # ---------------------------------------------------------------------------
 
@@ -462,11 +552,13 @@ def _single_retrieve(
     """Standard global top-k retrieval."""
     if query_embedding is None:
         query_embedding = traced_embedding([query], label="query_embed")[0]
-    vector_results = _vector_search(query, chunks, top_k * 2, index, query_embedding=query_embedding)
-    bm25_results = _bm25_search(query, chunks, top_k * 2, index)
+    candidate_pool = _candidate_pool_size(top_k)
+    vector_results = _vector_search(
+        query, chunks, candidate_pool, index, query_embedding=query_embedding
+    )
+    bm25_results = _bm25_search(query, chunks, candidate_pool, index)
     fused = _rrf_fuse(vector_results, bm25_results, k=60)
-
-    results = [r for r in fused[:top_k] if r["score"] >= threshold]
+    results = _finalize_results(fused, chunks, top_k, threshold)
 
     logger.info(
         "Retrieved %d chunks above threshold (%.2f) from %d candidates",
@@ -507,16 +599,17 @@ def _multi_company_retrieve(
 
         # Use cached per-ticker sub-index
         sub_index = index.get_ticker_subindex(ticker, chunks)
+        candidate_pool = _candidate_pool_size(per_ticker_k)
 
         vector_results = _vector_search(
-            query, ticker_chunks, per_ticker_k * 2, sub_index,
+            query, ticker_chunks, candidate_pool, sub_index,
             query_embedding=query_embedding,
         )
-        bm25_results = _bm25_search(query, ticker_chunks, per_ticker_k * 2, sub_index)
+        bm25_results = _bm25_search(query, ticker_chunks, candidate_pool, sub_index)
         fused = _rrf_fuse(vector_results, bm25_results, k=60)
 
         # Take per_ticker_k from this company
-        ticker_results = [r for r in fused[:per_ticker_k] if r["score"] >= threshold]
+        ticker_results = _select_anchor_results(fused, per_ticker_k, threshold)
         all_results.extend(ticker_results)
 
         logger.info(
@@ -528,4 +621,10 @@ def _multi_company_retrieve(
 
     # Re-sort merged results by score descending
     all_results.sort(key=lambda x: x["score"], reverse=True)
-    return all_results[:top_k]
+    final_anchors = all_results[:top_k]
+    return _expand_adjacent_results(
+        final_anchors,
+        chunks,
+        final_anchors,
+        max_results=top_k * 2,
+    )

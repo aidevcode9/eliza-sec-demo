@@ -25,17 +25,21 @@ def _make_chunk(
     ticker: str = "TEST",
     company: str = "Test Corp",
     embedding: list[float] | None = None,
+    doc_name: str | None = None,
+    filing_type: str = "10-K",
+    filing_date: str = "2025-01-01",
+    section_name: str = "Item 1",
 ) -> Chunk:
     """Build a minimal Chunk for testing."""
     return Chunk(
         chunk_id=chunk_id,
         text=text,
-        doc_name=f"{ticker}_10K_2025-01-01_full.txt",
+        doc_name=doc_name or f"{ticker}_10K_{filing_date}_full.txt",
         ticker=ticker,
         company=company,
-        filing_type="10-K",
-        filing_date="2025-01-01",
-        section_name="Item 1",
+        filing_type=filing_type,
+        filing_date=filing_date,
+        section_name=section_name,
         embedding=embedding or [],
     )
 
@@ -274,6 +278,145 @@ class TestMultiCompanyRetrieval:
         tickers_in_results = {r["chunk"].ticker for r in results}
         assert "AAPL" in tickers_in_results, "Apple chunks missing from results"
         assert "NVDA" in tickers_in_results, "NVIDIA chunks missing from results"
+
+
+# ---------------------------------------------------------------------------
+# Adjacent chunk recovery
+# ---------------------------------------------------------------------------
+
+
+class TestAdjacentChunkRecovery:
+    """Neighbor expansion should pull in adjacent same-doc/same-section chunks."""
+
+    @patch("src.retrieve._vector_search")
+    @patch("src.retrieve._bm25_search")
+    def test_includes_immediate_same_doc_section_neighbor(
+        self,
+        mock_bm25_search,
+        mock_vector_search,
+    ) -> None:
+        """If the answer chunk sits next to the top hit, retrieval should keep both."""
+        answer_chunk = _make_chunk(
+            "nvda-205",
+            "Revenue for fiscal year 2025 was $130.5 billion.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10K_2025-02-26_full.txt",
+            filing_date="2025-02-26",
+            section_name="Item 7",
+        )
+        top_hit_chunk = _make_chunk(
+            "nvda-206",
+            "The strong year-on-year growth was driven by Hopper demand.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10K_2025-02-26_full.txt",
+            filing_date="2025-02-26",
+            section_name="Item 7",
+        )
+        unrelated = _make_chunk("other", "Unrelated filing text", ticker="MSFT", company="Microsoft")
+        chunks = [answer_chunk, top_hit_chunk, unrelated]
+        idx = RetrievalIndex(chunks)
+
+        mock_vector_search.return_value = [{"chunk": top_hit_chunk, "score": 0.95, "method": "vector"}]
+        mock_bm25_search.return_value = [{"chunk": top_hit_chunk, "score": 12.0, "method": "bm25"}]
+
+        results = retrieve("What was NVIDIA's total revenue for fiscal year 2025?", chunks=chunks, index=idx, top_k=5)
+
+        ids = [r["chunk"].chunk_id for r in results]
+        assert "nvda-206" in ids
+        assert "nvda-205" in ids
+
+    @patch("src.retrieve._vector_search")
+    @patch("src.retrieve._bm25_search")
+    def test_does_not_cross_document_or_section_boundaries(
+        self,
+        mock_bm25_search,
+        mock_vector_search,
+    ) -> None:
+        """Neighbor expansion should not pull in chunks from another doc or section."""
+        top_hit_chunk = _make_chunk(
+            "nvda-206",
+            "The strong year-on-year growth was driven by Hopper demand.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10K_2025-02-26_full.txt",
+            filing_date="2025-02-26",
+            section_name="Item 7",
+        )
+        cross_section_neighbor = _make_chunk(
+            "nvda-205",
+            "Item 1A risk factor discussion.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10K_2025-02-26_full.txt",
+            filing_date="2025-02-26",
+            section_name="Item 1A",
+        )
+        cross_doc_neighbor = _make_chunk(
+            "nvda-207",
+            "Another filing's matching section text.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10Q_2025-01-29_full.txt",
+            filing_date="2025-01-29",
+            section_name="Item 7",
+        )
+        chunks = [cross_section_neighbor, top_hit_chunk, cross_doc_neighbor]
+        idx = RetrievalIndex(chunks)
+
+        mock_vector_search.return_value = [{"chunk": top_hit_chunk, "score": 0.95, "method": "vector"}]
+        mock_bm25_search.return_value = [{"chunk": top_hit_chunk, "score": 12.0, "method": "bm25"}]
+
+        results = retrieve("What was NVIDIA's total revenue for fiscal year 2025?", chunks=chunks, index=idx, top_k=5)
+
+        ids = [r["chunk"].chunk_id for r in results]
+        assert "nvda-206" in ids
+        assert "nvda-205" not in ids
+        assert "nvda-207" not in ids
+
+    @patch("src.retrieve._vector_search")
+    @patch("src.retrieve._bm25_search")
+    def test_wider_candidate_window_includes_ranked_out_chunk(
+        self,
+        mock_bm25_search,
+        mock_vector_search,
+    ) -> None:
+        """A wider pre-fusion window should surface a relevant chunk that rank-10 misses."""
+        target_chunk = _make_chunk(
+            "nvda-target",
+            "Revenue for fiscal year 2025 was $130.5 billion.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10K_2025-02-26_full.txt",
+            filing_date="2025-02-26",
+            section_name="Item 7",
+        )
+        decoy_chunk = _make_chunk(
+            "nvda-decoy",
+            "The strong year-on-year growth was driven by Hopper demand.",
+            ticker="NVDA",
+            company="NVIDIA Corporation",
+            doc_name="NVDA_10K_2025-02-26_full.txt",
+            filing_date="2025-02-26",
+            section_name="Item 7",
+        )
+        chunks = [target_chunk, decoy_chunk]
+        idx = RetrievalIndex(chunks)
+
+        def _search_side_effect(*args, **kwargs):
+            top_k = kwargs.get("top_k", args[2] if len(args) > 2 else None)
+            if top_k is not None and top_k > 10:
+                return [{"chunk": target_chunk, "score": 0.99, "method": "vector"}]
+            return [{"chunk": decoy_chunk, "score": 0.5, "method": "vector"}]
+
+        mock_vector_search.side_effect = _search_side_effect
+        mock_bm25_search.side_effect = _search_side_effect
+
+        results = retrieve("What was NVIDIA's total revenue for fiscal year 2025?", chunks=chunks, index=idx, top_k=5)
+
+        ids = [r["chunk"].chunk_id for r in results]
+        assert "nvda-target" in ids
 
 
 # ---------------------------------------------------------------------------
