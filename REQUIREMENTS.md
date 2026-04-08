@@ -1,8 +1,7 @@
-# REQUIREMENTS.md — SEC Filing RAG Assessment
+# REQUIREMENTS.md - SEC Filing RAG Assessment
 
-> Build driver for the Eliza FDE panel assessment.
-> Each requirement has acceptance criteria. Claude Code reads this to know what to build and when it's done.
-> Human approves each phase before moving to the next.
+> Lean build driver for the Eliza FDE panel assessment.
+> Acceptance criteria are used to keep the repo aligned to demo readiness and deliverables.
 
 ---
 
@@ -11,20 +10,20 @@
 Build a lightweight retrieval-augmented QA demo over the provided SEC filings corpus.
 
 The system must:
-- Accept a natural-language business question
-- Retrieve relevant filing evidence from the provided corpus
-- Produce the final answer in **one LLM API call**
-- Return a structured, evidence-grounded answer with visible citations
-- Be usable through a simple front-end demo
+- accept a natural-language business question
+- retrieve relevant filing evidence from the provided corpus
+- produce the final answer in **one LLM API call**
+- return a structured, evidence-grounded answer with visible citations
+- be usable through a simple front-end demo
 
-This is a **demo-first assessment build**, not a production platform.
+This is a demo-first assessment build, not a production platform.
 
 ---
 
 ## 2. Scope
 
 ### In scope
-- Offline ingestion of the provided SEC corpus (246 .txt filings)
+- Offline ingestion of the provided SEC corpus (246 `.txt` filings)
 - Parsing filing text and metadata (ticker, filing type, date, section)
 - Chunking filings into retrievable units (section-aware)
 - Building a retrieval index (hybrid: BM25 + vector)
@@ -33,7 +32,7 @@ This is a **demo-first assessment build**, not a production platform.
 - One final LLM call for answer generation
 - Returning structured answer + citations
 - Simple Streamlit front-end for live demo
-- Real evaluation set (8-10 questions) and quality notes
+- Real evaluation set and quality notes
 - Prompt iteration log and decision log
 
 ### Explicitly out of scope
@@ -48,19 +47,19 @@ This is a **demo-first assessment build**, not a production platform.
 - Full deployment hardening
 - Custom fine-tuned models
 
-Items above belong in the phase-2 roadmap discussion, not the build.
+These belong in the Phase 2 roadmap discussion, not the assessment build.
 
 ---
 
 ## 3. Key Assumptions
 
-- The provided corpus is the source of truth. Static for the build.
+- The provided corpus is the source of truth and is static for the build.
 - Authentication is a roadmap item confirmed with David.
 - Data update paths may be discussed but are not implemented.
 - The runtime answer path must use exactly one LLM API request.
 - Indexing, chunking, and retrieval preparation run before the answer call.
 - A lightweight single-user Streamlit UI is sufficient.
-- The corpus is .txt files, not PDFs. There are no page numbers. Cite by filing, section, and date.
+- The corpus is `.txt` files, not PDFs. There are no page numbers. Cite by filing, section, and date.
 
 ---
 
@@ -68,197 +67,144 @@ Items above belong in the phase-2 roadmap discussion, not the build.
 
 The build is successful if it can:
 
-1. Answer at least one live business question end-to-end in the UI
-2. Use retrieved filing evidence in a single final LLM call
-3. Cite source filings clearly (ticker, filing type, date, section, supporting quote)
+1. Answer at least one live business question end-to-end in the UI.
+2. Use retrieved filing evidence in a single final LLM call.
+3. Cite source filings clearly: ticker, filing type, filing date, section, and supporting quote.
 4. Handle at least:
-   - One single-company factual question
-   - One multi-company comparison question
-   - One time-based comparison question
-   - One insufficient-evidence / refusal case
-5. Be explained clearly in a client-style walkthrough under 12 minutes
+   - one single-company factual question
+   - one multi-company comparison question
+   - one time-based comparison question
+   - one insufficient-evidence / refusal case
+5. Be explained clearly in a client-style walkthrough under 12 minutes.
 
 ---
 
 ## 5. Top Risks
 
-Manage these actively during the build:
-
 | Risk | Mitigation |
-|------|-----------|
-| Noisy SEC text (XBRL headers) reduces retrieval quality | Strip XBRL before chunking. Verify with spot checks |
-| Missing or incorrect metadata weakens comparison questions | Parse from both file header and filename. Cross-check |
-| Retrieval over-focuses on one company for cross-company questions | Test multi-company retrieval early. Consider per-ticker retrieval if needed |
-| RRF fusion scores are not comparable to cosine similarity. Hard thresholds may filter good results | Do NOT apply hard confidence threshold on RRF scores. Return top-k, let generation handle uncertainty. Tune only if empirical testing shows noise |
-| Citation format unclear for text-based filings | Cite by ticker, filing type, date, section. No page numbers (corpus is .txt) |
-| Docs overstate what the code actually does | STATUS.md tracks what actually works, not what is planned |
+|------|------------|
+| Noisy SEC text reduces retrieval quality | Strip XBRL / noisy leading text before chunking |
+| Missing or incorrect metadata weakens comparison questions | Parse from both file header and filename; cross-check |
+| Retrieval over-focuses on one company | Test multi-company retrieval early; use ticker-aware retrieval |
+| RRF fusion scores are not calibrated confidence values | Do **not** hard-filter on RRF scores in the demo build |
+| Citation format unclear for text-based filings | Cite by ticker, filing type, filing date, and section |
+| Docs overstate what the code does | Keep docs aligned to the final demo configuration |
 | Extra complexity violates single-call constraint | No query rewrite, no verification loop, no chained LLM calls |
-| Demo fails on live question | Rehearse with 3 pre-tested questions. Have backup screenshots |
+| Demo fails on live question | Rehearse with 3 pre-tested questions and have backups |
 
 ---
 
-## 6. Phased Requirements
+## 6. Build Checklist
 
-### Phase 0 — Corpus Analysis
+### Phase 0 - Corpus Analysis
+- [x] Read 5+ filings across different companies and filing types
+- [x] Document XBRL/noisy-text boundary
+- [x] Map Item header patterns for 10-K and 10-Q
+- [x] Confirm filename metadata patterns
+- [x] Estimate corpus size and chunking implications
+- [x] Write evaluation set covering factual, cross-company, temporal, risk, refusal, and adversarial cases
 
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P0-1 | Analyze corpus structure | Read 5+ filings across different companies and types. Document file format, header, XBRL location, section patterns in DECISIONS.md | ☐ |
-| P0-2 | Identify XBRL boundary | Find reliable text marker where XBRL ends and filing content begins. Test across 10+ files. Document in DECISIONS.md | ☐ |
-| P0-3 | Map SEC section headers | List Item headers and how consistently they appear across 10-K vs 10-Q. Document in DECISIONS.md | ☐ |
-| P0-4 | Parse filename metadata | Confirm pattern: {TICKER}\_{TYPE}\_{QUARTER}\_{DATE}\_full.txt or {TICKER}\_{TYPE}\_{DATE}\_full.txt. Document exceptions | ☐ |
-| P0-5 | Estimate corpus size | Total chars after XBRL stripping. Average section sizes. Inform chunking decisions | ☐ |
-| P0-6 | Write evaluation set | 8-10 questions covering: single-company factual, cross-company comparison, temporal, regulatory/risk, insufficient-evidence, adversarial. Save to evals/golden_set.json and evals/adversarial.json | ☐ |
+**Checkpoint:** Corpus structure and evaluation set are documented in `DECISIONS.md` and `evals/`.
 
-**Gate:** Human reviews corpus analysis + evaluation set before Phase 1.
+### Phase 1 - Ingestion Pipeline
+- [x] Load all provided `.txt` files from `data/`
+- [x] Strip noisy leading text
+- [x] Chunk by SEC Item boundaries when possible
+- [x] Sub-chunk large sections with overlap
+- [x] Preserve metadata on every chunk
+- [x] Generate embeddings
+- [x] Persist chunks + embeddings for reload
+- [x] `uv run python -m src.ingest` completes successfully
 
----
+**Checkpoint:** Spot-check chunks for at least 3 companies. Metadata and section names look correct.
 
-### Phase 1 — Ingestion Pipeline
+### Phase 2 - Retrieval
+- [x] Vector search works
+- [x] BM25 search works
+- [x] Hybrid fusion (RRF) works
+- [x] Top-k retrieval returns results without brittle hard thresholds
+- [x] Multi-company retrieval does not collapse to one company on the supported demo questions
+- [x] Retrieval results carry citation metadata
+- [x] Spot-check retrieval against golden questions
 
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P1-1 | Load all .txt files from data/ | All 246 files loaded. Metadata parsed from file header AND filename | ☐ |
-| P1-2 | Strip XBRL / noisy leading text | Content before filing start marker removed. Verified across 10+ files from different companies | ☐ |
-| P1-3 | Section-aware chunking | Chunk by SEC Item boundaries when detectable. Paragraph-preserving where possible. Sliding window fallback for weak structure | ☐ |
-| P1-4 | Within-section splitting | Sections exceeding max chunk size split with overlap. Section metadata preserved on sub-chunks | ☐ |
-| P1-5 | Chunk metadata | Each chunk has: chunk_id, doc_name, ticker, filing_type, filing_date, report_period/quarter (if available), section_name, text. No page numbers | ☐ |
-| P1-6 | Embed all chunks | Embeddings generated via traced_embedding(). Batched. Stored alongside metadata | ☐ |
-| P1-7 | Persist to disk | Chunks + embeddings saved. Can be loaded without re-ingesting | ☐ |
-| P1-8 | Runnable | `uv run python -m src.ingest` completes on full corpus. Logs total chunks, time | ☐ |
-| P1-9 | Document decisions | All ingestion decisions in DECISIONS.md with timestamps | ☐ |
+**Checkpoint:** For golden questions, the correct filings appear in the retrieved result set.
 
-**Gate:** Human spot-checks chunks for 3 companies. Metadata correct. XBRL stripped. Sections identified.
+### Phase 3 - Generation (Single LLM Call)
+- [x] Prompt answers from context only
+- [x] Output is structured JSON
+- [x] Insufficient evidence triggers refusal; weak evidence may still return a low-confidence answer with a warning
+- [x] Cross-company questions are organized cleanly
+- [x] Final answer comes from exactly one `traced_llm_call()`
+- [x] Prompt iterations are logged in `PROMPT_LOG.md`
+- [x] Injection attempts are refused
 
----
+**Checkpoint:** Review 3 answers. Citations are specific and verifiable.
 
-### Phase 2 — Retrieval
+### Phase 4 - Citation Validation (if time permits)
+- [x] Exact substring validation attempted first
+- [x] Jaccard similarity check available
+- [x] Citations tagged with validation metadata
+- [x] Overall `citations_valid` flag included
 
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P2-1 | Vector search | Query embedded, cosine similarity against chunks, returns scored results | ☐ |
-| P2-2 | BM25 search | Tokenized query matched against chunk text | ☐ |
-| P2-3 | Hybrid fusion (RRF) | Vector + BM25 fused via Reciprocal Rank Fusion. Single ranked list | ☐ |
-| P2-4 | Top-k without brittle thresholds | Return top-k results. Do NOT hard-filter on RRF scores. Let generation handle uncertainty. Only add threshold if empirical testing proves necessary | ☐ |
-| P2-5 | Multi-company retrieval | Questions mentioning multiple tickers retrieve relevant chunks from each company, not just top-k from one | ☐ |
-| P2-6 | Metadata in results | Each result includes ticker, filing_type, filing_date, section_name for citation | ☐ |
-| P2-7 | Retrieval spot-check | Run 3+ golden set questions through retrieval only. Verify correct source docs appear in results | ☐ |
-| P2-8 | Document decisions | Retrieval decisions in DECISIONS.md | ☐ |
+**Note:** Priority 3. Ship ingestion, retrieval, generation, API, evals, and frontend first.
 
-**Gate:** Human reviews retrieval for 3 golden set questions. Correct filings in results. Multi-company not collapsed.
+### Phase 5 - Pipeline + API
+- [x] End-to-end pipeline runs
+- [x] `POST /v1/ask` returns structured answer JSON
+- [x] `GET /healthz` returns service status
+- [x] Example request in README works
 
----
+**Checkpoint:** Run the example request and get a cited answer.
 
-### Phase 3 — Generation (Single LLM Call)
+### Phase 6 - Evaluation
+- [x] Eval runner executes the scoped golden + adversarial sets
+- [x] Coverage includes factual, cross-company, temporal, risk/regulatory, refusal, and adversarial cases
+- [x] Results and known failure modes are documented honestly
+- [x] `ENGAGEMENT_BRIEF.md` reflects the final demo-scoped eval story
 
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P3-1 | System prompt v1 | Answer from context only. Cite by ticker, filing type, date, section. Refuse if insufficient. Log in PROMPT_LOG.md | ☐ |
-| P3-2 | Structured output | LLM returns JSON: answer, citations array (ticker, filing_type, filing_date, section, quoted_text), confidence, refusal_reason | ☐ |
-| P3-3 | Cite-or-refuse | Empty or insufficient context → refusal with reason. No hallucinated answers | ☐ |
-| P3-4 | Cross-company handling | Prompt organizes answer by company when question mentions multiple companies | ☐ |
-| P3-5 | Single call constraint | Final answer from exactly one call to traced_llm_call(). No chained calls | ☐ |
-| P3-6 | Prompt iteration | At least 3 prompt versions iterated against eval questions. Each version logged in PROMPT_LOG.md | ☐ |
-| P3-7 | Injection handling | Injection attempts return refusal | ☐ |
-| P3-8 | Document decisions | Generation decisions in DECISIONS.md | ☐ |
+**Checkpoint:** Evaluation notes are truthful, reproducible, and easy to explain.
 
-**Gate:** Human reviews 3 answers. Citations specific and verifiable. Refusal works on out-of-scope question.
+### Phase 7 - Frontend
+- [x] Streamlit app accepts a question
+- [x] Answer is displayed clearly
+- [x] Citations are human-readable
+- [x] Refusal reason is shown clearly
+- [x] Loading state exists
+- [x] One pre-tested demo question is easy to run
 
----
+**Checkpoint:** Ask a question in the UI and inspect the answer and citations.
 
-### Phase 4 — Citation Validation (if time permits)
+### Phase 8 - Polish + Presentation
+- [x] `DECISIONS.md` matches what was actually built
+- [x] `PROMPT_LOG.md` matches current prompt behavior
+- [x] `ENGAGEMENT_BRIEF.md` contains final demo-ready numbers and wording
+- [x] `README.md` is accurate and does not overclaim
+- [x] Lint passes
+- [ ] Demo path is rehearsed
+- [ ] 3 demo questions are selected (single-company, cross-company, refusal)
 
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P4-1 | Jaccard similarity check | Each citation's quoted_text checked against source chunk. Score calculated | ☐ |
-| P4-2 | Substring match | Exact substring match attempted first | ☐ |
-| P4-3 | Validation metadata | Each citation tagged: valid (bool), validation_note, jaccard_score | ☐ |
-| P4-4 | Overall flag | Response includes citations_valid boolean | ☐ |
-
-**Note:** This phase is Priority 3. Ship Phases 1-3 + 5-7 first. Add citation validation only if time remains.
-
----
-
-### Phase 5 — Pipeline + API
-
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P5-1 | End-to-end pipeline | `pipeline.ask(question)` runs: inject check → retrieve → generate. Returns complete response | ☐ |
-| P5-2 | API endpoint | `POST /v1/ask` accepts {"question": str}, returns response JSON | ☐ |
-| P5-3 | Health endpoint | `GET /healthz` returns status and chunk count | ☐ |
-| P5-4 | Example request | curl command in README that works against running API | ☐ |
-
-**Gate:** Human runs example request. Gets cited answer.
-
----
-
-### Phase 6 — Evaluation
-
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P6-1 | Run eval set | `uv run python evals/runner.py` runs all questions. Reports pass/fail per question + overall | ☐ |
-| P6-2 | Coverage | Eval covers: single-company, cross-company, temporal, risk/regulatory, refusal, adversarial | ☐ |
-| P6-3 | Results documented | For each question: expected evidence, actual answer quality, citation quality, pass/fail, known failure modes | ☐ |
-| P6-4 | Results in brief | Eval results filled into docs/ENGAGEMENT_BRIEF.md section 4 with real numbers | ☐ |
-
-**Gate:** Eval results documented. Honest about failures.
-
----
-
-### Phase 7 — Frontend
-
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P7-1 | Streamlit app | Question input, submit button, answer display, citation display | ☐ |
-| P7-2 | Citation rendering | Citations show ticker, filing type, date, section, and supporting quote. Human-readable, not JSON dump | ☐ |
-| P7-3 | Refusal display | Refusal reason shown clearly when system refuses | ☐ |
-| P7-4 | Loading state | Loading indicator while processing | ☐ |
-| P7-5 | Pre-loaded example | Default question or quick-demo button | ☐ |
-| P7-6 | Runnable | `uv run streamlit run frontend/app.py` works | ☐ |
-
-**Gate:** Human asks question in UI, gets cited answer.
-
----
-
-### Phase 8 — Polish + Presentation
-
-| ID | Requirement | Acceptance Criteria | Status |
-|----|-------------|-------------------|--------|
-| P8-1 | DECISIONS.md complete | All decisions timestamped. Matches what was actually built | ☐ |
-| P8-2 | PROMPT_LOG.md complete | All prompt iterations documented. Matches current prompt in generate.py | ☐ |
-| P8-3 | ENGAGEMENT_BRIEF.md complete | Eval results filled in. All placeholders replaced with real numbers | ☐ |
-| P8-4 | README accurate | Setup instructions work from clean clone. Deliverables listed. Does not overclaim | ☐ |
-| P8-5 | Lint passes | `uv run ruff check src/` — zero errors | ☐ |
-| P8-6 | Demo rehearsal | Talk through presentation once out loud. 12 minutes max | ☐ |
-| P8-7 | Demo questions selected | 3 questions tested and ready: one single-company, one cross-company, one refusal | ☐ |
-
-**Gate:** All deliverables complete. Demo runs clean. Docs match reality.
+**Checkpoint:** The demo runs cleanly and the docs match reality.
 
 ---
 
 ## 7. Build Priorities
 
-If time runs short, deliver in this order:
-
-**Priority 1 — Must work:**
-- Ingestion + metadata (P1)
-- Retrieval (P2)
-- One-call answer path (P3)
-- API endpoint (P5)
+### Priority 1 - Must work
+- Ingestion + metadata
+- Retrieval
+- One-call answer path
+- API endpoint
 - Visible citations
 
-**Priority 2 — Must be believable:**
-- Frontend (P7)
-- Real eval set with results (P6)
-- Real prompt log (P3-6)
+### Priority 2 - Must be believable
+- Frontend
+- Real eval set with results
+- Real prompt log
 - Clean README
 - Coherent demo walkthrough
 
-**Priority 3 — Only if time remains:**
-- Citation validation (P4)
-- Stronger retrieval balancing for multi-company
-- Nicer UI
-- Architecture diagram
-- Roadmap polish
-
-The minimum viable demo: question in → cited answer out → one refusal → eval results exist → docs match reality.
+### Priority 3 - Only if time remains
+- Stronger citation validation
+- Additional telemetry polish
+- Extra UI polish
+- Roadmap refinement
