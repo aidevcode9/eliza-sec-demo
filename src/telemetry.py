@@ -23,7 +23,7 @@ _langfuse: Any | None = None
 
 def get_langfuse() -> Any | None:
     """Return a Langfuse client, or None if disabled / unconfigured."""
-    if not config.telemetry_enabled or not config.langfuse_secret_key:
+    if not config.langfuse_enabled or not config.langfuse_secret_key:
         return None
     global _langfuse
     if _langfuse is None:

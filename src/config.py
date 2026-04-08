@@ -47,6 +47,7 @@ class Config:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     # --- Langfuse ---
+    langfuse_enabled: bool = os.getenv("LANGFUSE_ENABLED", "false").lower() == "true"
     langfuse_secret_key: str = os.getenv("LANGFUSE_SECRET_KEY", "")
     langfuse_public_key: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     langfuse_host: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")

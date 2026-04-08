@@ -1,5 +1,6 @@
 data/
 *.zip
+docs/INTERNAL_RETROSPECTIVE.md
 vector_store/
 .env
 __pycache__/

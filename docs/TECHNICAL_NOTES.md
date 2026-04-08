@@ -91,3 +91,26 @@ All model and embedding calls flow through traced wrappers. Optional Langfuse in
 | Some deeply nested exact figures may still be missed | Chunk-level retrieval can still dilute very specific facts | Wider candidate pools + neighbor-aware retrieval reduce misses; hierarchical retrieval remains a Phase 2 roadmap item |
 | Single-call design limits self-correction | Assignment constraint | Stronger prompt + retrieval quality compensate |
 | Demo corpus path may differ from raw visible repo files | Processed index is the operative runtime dataset | Clarified in README and presentation |
+
+---
+
+## Build Rationale
+
+### Vector Search: numpy (not FAISS, pgvector, Pinecone)
+At 75K chunks, brute-force cosine similarity via numpy matrix multiply runs in ~50ms. FAISS adds C++ install complexity for marginal gain at this scale — worth it at 500K+. pgvector requires PostgreSQL infrastructure that a single-user demo doesn't need. Pinecone/Weaviate add managed service dependencies. All are documented as Phase 2 options for production scale.
+
+### RAG Framework: custom (not LlamaIndex, LangChain)
+Evaluated LlamaIndex mid-build. Our SEC-specific requirements — section-aware chunking, XBRL stripping, ticker detection, multi-company retrieval — need custom code regardless of framework. At ~2K lines across 8 modules, the custom pipeline is fully debuggable and has no abstraction layers between us and the retrieval logic. Migration risk outweighed framework benefits on a timeboxed build.
+
+### Embedding: text-embedding-3-large (1536 dims)
+Best retrieval quality from OpenAI's lineup. Memory footprint (~440MB at 75K chunks) is acceptable for single-user demo. text-embedding-3-small (512 dims, ~150MB) is the Phase 2 option if memory becomes a constraint.
+
+---
+
+## Retrospective
+
+The system passes 100% on our eval suite — 10 golden set questions covering single-company factual, cross-company comparison, temporal, regulatory risk, and refusal scenarios, plus 7 adversarial cases including prompt injection and out-of-scope questions. Safety is the strongest dimension: every out-of-scope or injection attempt is correctly refused.
+
+The architecture is intentionally simple — custom hybrid retrieval over numpy rather than a framework like LlamaIndex or a managed vector DB. At this corpus scale (75K chunks, 54 companies), the simple approach gives us full control and sub-100ms vector search.
+
+If starting over, I'd timebox more time in eval infrastructure — specifically LLM-as-judge evaluation and retrieval regression tests. Time was the primary constraint, and many decisions were made to deliver within the build window rather than optimize. The roadmap covers the improvements we'd make with more time: hierarchical retrieval for deeply nested facts, better citation validation metrics, and production infrastructure.
