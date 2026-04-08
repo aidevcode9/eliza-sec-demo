@@ -1,13 +1,13 @@
 # Technical Notes — SEC Filing RAG System
 
 > Implementation details for the technical reviewer.
-> For design decisions and rationale, see DECISIONS.md.
+> These notes describe the final demo configuration, not every intermediate experiment recorded in DECISIONS.md.
 
 ---
 
 ## Pipeline Architecture
 
-```
+```text
 Question → Injection Filter → Ticker Detection → Retrieval → Generation → Citation Validation → Response
 ```
 
@@ -18,87 +18,69 @@ Question → Injection Filter → Ticker Detection → Retrieval → Generation 
 ## Ingestion (src/ingest.py)
 
 ### Text Normalization
-SEC filings converted from HTML to .txt contain pipe delimiters (`|`) from table cells and unicode replacement characters (`�`). `normalize_text()` replaces these with spaces before any processing, preventing downstream issues with section detection and embedding quality.
+SEC filings converted from HTML to `.txt` contain pipe delimiters (`|`) from table cells and unicode replacement characters (`�`). `normalize_text()` replaces these before downstream processing.
 
-### XBRL Stripping
-Each filing starts with an XBRL data block (1 to 1800+ lines). Stripped by finding the first line containing "UNITED STATES" — verified present in 100% of corpus files.
+### XBRL / Noisy Leading Text Stripping
+Each filing starts with a machine-readable or noisy leading block. The ingestion path strips this before section splitting and chunking.
 
 ### Section Splitting
-SEC Item headers appear mid-line in the .txt files (e.g., `35Table of ContentsItem 7. Management's Discussion...`). Pre-normalization inserts newlines before Item headers that follow:
-- Digits (page numbers): `35Item 7.`
-- "Table of Contents": `Table of ContentsItem 7.`
-- Periods (section endings): `applicable.Item 1B.`
-- Lowercase letters (concatenated words): `ReservedItem 7.`
-
-TOC lines are filtered by detecting trailing page numbers.
+SEC Item headers are used as the primary section boundary. The parser also handles cases where Item headers appear mid-line in `.txt` conversions.
 
 ### Chunking
-Sections are sub-chunked at 1000 characters with 200-character overlap. Paragraph boundaries are preferred over mid-sentence splits. Each chunk carries metadata: ticker, company, filing_type, filing_date, section_name.
+Sections are sub-chunked at the demo configuration size with overlap. Each chunk carries metadata including ticker, company, filing type, filing date, and section name.
 
 ---
 
 ## Retrieval (src/retrieve.py)
 
 ### Hybrid Search: BM25 + Vector + RRF
-- **BM25:** Precomputed at index build time (tokenized docs, document frequencies, avg doc length). Catches exact terms like ticker symbols and dollar amounts.
-- **Vector:** Cosine similarity via numpy matrix multiplication against precomputed embedding matrix. Catches semantic meaning.
-- **RRF (Reciprocal Rank Fusion):** Combines both ranked lists using `1/(k + rank + 1)` with k=60. A chunk appearing in both lists ranks higher than one in only one.
+- **BM25:** catches exact terms such as ticker symbols, section names, and financial phrases
+- **Vector:** captures semantic similarity
+- **RRF:** combines lexical and semantic rankings into one result list
 
 ### Ticker-Aware Retrieval
-- Detects ticker symbols and company names in the query
-- **Single ticker:** Filters to that company's chunks before searching (reduces noise dramatically)
-- **Multi-ticker:** Retrieves per-ticker with ceiling-divided slot allocation, then merges. Ensures cross-company questions get balanced coverage.
+- **Single ticker detected:** restrict retrieval to that company’s chunks
+- **Multiple tickers detected:** retrieve per ticker, then merge for balanced coverage
 
 ### No Hard RRF Threshold
-`CONFIDENCE_THRESHOLD=0.0` — RRF scores are not comparable to cosine similarity. Hard filtering would reject good results. Top-k is returned; the generation prompt handles uncertainty via cite-or-refuse.
+`CONFIDENCE_THRESHOLD=0.0` in the demo build. RRF is a ranking signal, not a calibrated confidence score, so hard filtering is deferred until broader post-demo evaluation.
 
 ---
 
-## Generation (src/generate.py, src/prompts.py)
+## Generation (src/generate.py)
 
-### System Prompt (Version 5)
-Key instructions:
-- Answer only from provided context
-- Cite by ticker, filing type, date, and section
-- Refuse if evidence is insufficient (confidence=low)
-- Organize multi-company answers by company with comparative summary
-- Exact substring quotes only — no paraphrasing
-- Temporal comparisons must include both values and the delta
-- Injection resistance: refuse if asked to ignore instructions or reveal prompt
-
-### Confidence Calibration
-- **High:** Directly and clearly stated in context, multiple supporting quotes
-- **Medium:** Supported but requires interpretation, evidence is indirect
-- **Low:** Insufficient or ambiguous — flagged with `_warning` in response
+### Prompt Behavior
+The final prompt instructs the model to:
+- answer only from provided context
+- cite filing/date/section metadata
+- refuse when evidence is insufficient
+- keep multi-company answers as plain text inside the top-level `answer` field
+- merge all supporting citations into the top-level `citations` array
+- resist prompt injection attempts
 
 ### Structured Output
-`response_format={"type": "json_object"}` enforces valid JSON. The prompt specifies the exact schema. `setdefault()` ensures all required fields exist even if the LLM omits them.
+The answer is returned as structured JSON with a plain-text `answer` field plus
+top-level citations. `generate.py` also normalizes malformed nested company JSON
+back into that flat contract so the API and frontend stay consistent.
 
 ---
 
 ## Citation Validation (src/validate.py)
 
-### Jaccard Similarity
-Token-level overlap between the citation's `quoted_text` and retrieved chunk text. Threshold: 0.30 (configurable). Catches cases where the LLM slightly paraphrases the source.
-
-### Substring Match
-Checked first — if the exact quote appears verbatim in any retrieved chunk, the citation is valid regardless of Jaccard score.
-
-### Negation Mismatch Detection
-Heuristic that flags when the answer and source text disagree on negation words ("not", "cannot", etc.) while sharing significant term overlap. Known to produce false positives on SEC filings (which routinely contain legal negation language). Logged at DEBUG level — informational only, does not affect the response.
+### Exact Match + Similarity Checks
+Validation attempts an exact substring match first, then falls back to token-overlap similarity.
 
 ### Validation Metadata
-Each citation is tagged with: `valid` (bool), `validation_note` (explanation), `jaccard_score` (float). The response carries an overall `citations_valid` boolean.
+Each citation can include validation metadata such as:
+- `valid`
+- `validation_note`
+- `jaccard_score`
 
 ---
 
 ## Telemetry (src/telemetry.py)
 
-### All LLM/Embedding Calls Traced
-`traced_llm_call()` and `traced_embedding()` wrap every API call. Tracks: model, tokens in/out, latency (ms), label. Stored in-memory and exposed at `/v1/telemetry`.
-
-### Langfuse Integration
-Optional (toggle via `LANGFUSE_ENABLED`). Logs generations and embedding spans to Langfuse cloud for cost tracking and latency monitoring. Uses Langfuse SDK v4 `start_observation()` API. Non-blocking — failures are caught and logged, never crash the pipeline.
+All model and embedding calls flow through traced wrappers. Optional Langfuse integration can be enabled for production-style latency and cost inspection without changing the core demo behavior.
 
 ---
 
@@ -106,7 +88,6 @@ Optional (toggle via `LANGFUSE_ENABLED`). Logs generations and embedding spans t
 
 | Limitation | Root Cause | Mitigation |
 |------------|-----------|------------|
-| Some exact dollar figures not retrieved | 2000→1000 char chunks improved this but deep-nested facts can still miss top-5 | Hierarchical retrieval designed (see DECISIONS.md roadmap) |
-| JPM 10-K has most MD&A in Item 15 | JPM filing incorporates by reference | Section splitting captures content; BM25 finds it |
-| Negation mismatch false positives | SEC filings use extensive legal negation language | Demoted to DEBUG logging |
-| Single LLM call limits self-correction | Assignment constraint | Prompt engineering compensates |
+| Some deeply nested exact figures may still be missed | Chunk-level retrieval can still dilute very specific facts | Wider candidate pools + neighbor-aware retrieval reduce misses; hierarchical retrieval remains a Phase 2 roadmap item |
+| Single-call design limits self-correction | Assignment constraint | Stronger prompt + retrieval quality compensate |
+| Demo corpus path may differ from raw visible repo files | Processed index is the operative runtime dataset | Clarified in README and presentation |

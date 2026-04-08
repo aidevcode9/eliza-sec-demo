@@ -269,6 +269,18 @@ Risk: May refuse answers that are actually correct but marked low confidence. Ac
 
 ---
 
+## 2026-04-08 13:01 — Flat Multi-Company Output Contract
+
+Decision: Keep the response schema flat at the top level: `answer` must be plain text and all citations must live in the top-level `citations` array. Added backend normalization in `generate.py` to recover malformed nested company JSON or stringified JSON inside `answer`.
+
+Reasoning: Cross-company responses were sometimes returning nested company objects such as `{"AAPL": {...}, "PFE": {...}}` or embedding that structure as a JSON string inside `answer`. That broke the API and frontend contract because the top-level `citations` field could come back empty even when the model had produced usable support.
+
+Alternative considered: Rely on prompt wording alone. Rejected because the model had already demonstrated schema drift on real cross-company prompts. Prompt clarification plus normalization is safer.
+
+Risk: Normalization can only recover shapes that are structurally recognizable. If the model returns a different malformed format, the flat contract may still fail and should surface in tests.
+
+---
+
 ## 2026-04-07 19:04 — Prompt Iteration V3-V5
 
 Decision: Evolved system prompt from V2 to V5 with cross-company formatting, confidence calibration, injection resistance, exact-quote guidance, temporal comparison instructions, and risk factor grouping.
@@ -430,3 +442,42 @@ Risk: Panel may ask "only 7 questions?" Mitigation: 7 golden + 7 adversarial = 1
 - GS-012: ABBV Humira/Skyrizi — requires full corpus ingest
 
 ---
+
+## ROADMAP — Performance & UX Improvements (Post-Demo)
+
+### Binary chunk cache (saves ~10-15s cold start)
+After first JSONL load, pickle the chunks list + embeddings to `vector_store/chunks.pkl`. On subsequent loads, try pickle first (fast deserialization), fall back to JSONL. ~10 lines in `load_chunks()` / `save_chunks()`. Currently cold start spends ~15s parsing JSONL line-by-line.
+
+### Structured answer rendering in frontend
+Format JSON-like answers into structured sections/cards in `frontend/app.py` instead of dumping raw text. Group by company for cross-company answers, show citations as expandable cards, highlight confidence level. Purely a rendering/readability fix — no backend changes needed.
+
+### Frontend answer caching for demo questions
+Cache responses for known demo questions (the 3 panel demo questions + golden set) so repeated prompts feel instant during the live panel. Store in Streamlit session state or a simple dict. Invalidate on corpus re-ingest.
+
+---
+
+---
+
+## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
+
+## 2026-04-08 — Generation Output Length Cap (MAX_TOKENS=800)
+
+Decision: Added MAX_TOKENS=800 to config, passed as max_completion_tokens to OpenAI API.
+
+Reasoning: Uncapped generation was producing 700-900 token responses (~4.5s). Capping at 800 keeps answers complete while avoiding runaway output. 500 was too tight — truncated JSON mid-response.
+
+Alternative considered: No cap — rejected due to latency. 500 — rejected, caused JSON parse failures.
+
+Risk: Complex cross-company answers may truncate. Tunable via .env.
+
+---
+
+## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
+
+Decision: Align README, CLAUDE.md, and ENGAGEMENT_BRIEF.md to the final demo configuration: no hard RRF threshold, section/date-based citations, and scoped demo evaluation set.
+
+Reasoning: Earlier docs reflected intermediate build assumptions and experiments. The final demo snapshot should describe what is actually shipped and presented.
+
+Alternative considered: Leaving intermediate language in place and explaining verbally during the panel. Rejected because it creates avoidable trust gaps in repo review.
+
+Risk: None. This is a documentation alignment step, not a behavioral code change.

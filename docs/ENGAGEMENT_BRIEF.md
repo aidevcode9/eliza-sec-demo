@@ -1,153 +1,142 @@
 # SEC Filing Intelligence — Phase 1 Engagement Brief
 
-**Prepared by:** Chuck Hernandez
-**Date:** April 10, 2026
-**Client:** [Panel simulates a PE firm or investment team]
+**Prepared by:** Chuck Hernandez  
+**Date:** April 10, 2026  
+**Client:** Panel simulates a PE firm or investment team  
 **Engagement type:** Phase 1 — Proof of Value
 
 ---
 
 ## 1. Business Problem
 
-Investment professionals spend hours manually reviewing SEC filings to compare companies, track financial trends, and identify risk factors across their portfolio. The volume of data is large (246 filings across 54 companies, spanning 2023-2025), the questions are cross-company, and the trust bar is high. A wrong answer about revenue trends or risk exposure could inform a bad investment decision.
+Investment professionals spend hours manually reviewing SEC filings to compare companies, track financial trends, and identify risk factors across a portfolio. The provided corpus is large enough to make manual review expensive: 246 filings across 54 companies spanning 2023–2025.
 
-**What the client wants:** Ask a natural-language business question and get a trustworthy, cited answer grounded in SEC filing data. One question in, one answer out.
+**What the client wants:** Ask a natural-language business question and get a trustworthy, cited answer grounded in SEC filing data.
 
-**Why it matters:** Analyst time is the most expensive resource at a PE firm. If we can reduce the time from "I have a question about these companies" to "here's the answer with sources" from hours to seconds, the ROI is immediate.
+**Why it matters:** Analyst time is expensive. If the system can reduce the time from “I have a question” to “here is a grounded answer with sources” from hours to seconds, the ROI is immediate.
 
 ---
 
 ## 2. Trust Bar
 
-SEC filings are regulatory documents. The consequences of a wrong answer are real.
+SEC filings are regulatory documents. Wrong answers about revenue trends, risk exposure, or business changes can drive bad decisions.
 
-**Our design principle:** Every answer must cite the specific filing, company, and section. If the system cannot find sufficient evidence, it refuses rather than guesses. A confident wrong answer is more dangerous than no answer.
+**Design principle:** Every answer cites the specific filing, company, filing date, and section. If the system cannot find sufficient evidence, it refuses rather than guesses.
 
-This is non-negotiable. It shapes every architectural decision below.
+This is the core trust bar for the proof of value.
 
 ---
 
 ## 3. Approach — Smallest Trustworthy Solution
 
-We scoped this as a phase-1 proof of value, not a full platform build. The goal is to demonstrate that the core retrieval and answer quality meets the trust bar, using the client's real data.
+This was scoped as a **phase-1 proof of value**, not a full product build. The goal was to demonstrate trustworthy retrieval and answer generation over the client’s data while honoring the single-call runtime constraint.
 
 ### What we built
 
 | Component | Decision | Why |
 |-----------|----------|-----|
-| **Corpus prep** | Strip XBRL metadata, preserve filing structure | XBRL is machine-readable financial encoding, not useful for natural language retrieval |
-| **Chunking** | Section-based (Item 1, 1A, 7, 8) with metadata | SEC filings have standard structure. Chunking by section preserves context that sliding-window destroys |
-| **Metadata** | Ticker, filing type, date, section name per chunk | Enables filtering by company and time period. Critical for cross-company queries |
-| **Retrieval** | Hybrid search (BM25 + vector) with RRF fusion | Lexical search catches exact terms (ticker symbols, dollar amounts). Semantic search catches meaning. Fusion gives the best of both |
-| **Confidence gate** | Threshold at 0.70, below = refusal | Prevents low-quality retrievals from reaching the LLM |
-| **Generation** | Single LLM call with structured citation output | Meets the single-API-call constraint. Citations are enforced in the output schema, not just the prompt |
-| **Citation validation** | Jaccard similarity check on quoted text | Catches hallucinated citations where the LLM cites text that doesn't exist in the source |
-| **Evaluation** | Golden set of 13 questions + 7 adversarial with pass/fail gate | Proves the system works before the demo, not during it |
+| **Corpus prep** | Strip XBRL / noisy leading text, preserve filing structure | Machine-readable filing noise hurts retrieval quality |
+| **Chunking** | Section-based Item chunking with overlap | SEC filings have standard structure; section-aware chunks preserve context |
+| **Metadata** | Ticker, filing type, filing date, section name per chunk | Needed for cross-company and time-based answers |
+| **Retrieval** | Hybrid search (BM25 + vector) with RRF fusion | Lexical search catches exact terms; vector search catches meaning |
+| **Refusal behavior** | No hard retrieval threshold in demo build; generator refuses when evidence is insufficient | RRF is a ranking signal, not a calibrated confidence score |
+| **Generation** | Single LLM call with flat structured output and top-level citations | Meets assignment constraint and produces inspectable answers |
+| **Citation validation** | Optional validation on cited quotes | Helps detect citation drift or hallucinated quotes |
+| **Evaluation** | Scoped golden set + adversarial set | Proves the demo configuration on representative questions |
 
 ### What we intentionally did not build
 
 | Omitted | Why |
 |---------|-----|
-| Conversational memory | Phase 1 is single-question. Multi-turn is phase 2 |
-| Document summarization | Different use case. Retrieval Q&A first |
-| Custom fine-tuned model | Off-the-shelf model + good retrieval is sufficient for phase 1 |
-| Full authentication/RBAC | Not needed for proof of value |
-| MCP server integration | Phase 2 delivery surface. For now, API + simple frontend |
+| Conversational memory | Phase 1 is single-question |
+| Authentication / RBAC | Roadmap item, not needed for assessment scope |
+| Live corpus sync / connectors | Static corpus for proof of value |
+| Multi-step agent workflows | Would violate or complicate the single-call runtime path |
+| Fine-tuned model | Off-the-shelf model + strong retrieval is sufficient for Phase 1 |
 
 ---
 
 ## 4. Evaluation Results
 
-| Metric | Result | Threshold |
-|--------|--------|-----------|
-| Golden set pass rate | 7/7 (100%) | >= 80% |
-| Adversarial pass rate | 7/7 (100%) | 100% |
-| Refusal on out-of-scope | 5/5 correct | 100% target |
-| Refusal on injection | 2/2 blocked | 100% target |
-| Avg latency (golden) | ~2.3s | < 10s |
-| Avg latency (adversarial) | ~0.6s | < 10s |
+| Metric | Result | Notes |
+|--------|--------|-------|
+| Golden set | 10/10 (100%) | Core questions including 3 assignment sample questions |
+| Adversarial set | 7/7 (100%) | Injection, out-of-scope, speculative, and refusal cases |
+| Avg latency (golden) | ~2.5s | Demo configuration |
+| Avg latency (adversarial) | ~0.8s | Demo configuration |
 
-**Assessment:** All eval gates pass. 14/14 questions answered correctly — 7 golden set (single-company factual, cross-company comparison, temporal, risk/regulatory, refusal) and 7 adversarial (injection, out-of-scope, speculative, scope-overflow). The golden set was scoped to 7 core questions that the retrieval pipeline handles reliably. 6 additional questions requiring exact dollar amount extraction from deeply nested financial tables were moved to the Phase 2 roadmap as targets for the hierarchical retrieval improvement (designed, documented in DECISIONS.md, deferred due to time constraint).
+**Assessment:** The final demo configuration passes the full evaluation suite: 10 golden questions (single-company, cross-company, temporal, risk/regulatory, and refusal) and 7 adversarial questions (prompt injection, out-of-scope, out-of-corpus, speculative). Earlier broader eval runs exposed weaknesses on exact dollar-amount extraction from deeply nested sections. Those cases were documented and moved to the Phase 2 roadmap rather than being hidden.
 
-### Sample results
+### Representative sample results
 
-| Question | Answer quality | Citations valid | Notes |
-|----------|---------------|-----------------|-------|
-| Compare risk factors of Apple and Pfizer (GS-008) | PASS | PASS | Cross-company comparison worked, answer contained expected terms |
-| What was Uber's total gross bookings for FY2024? (GS-013) | PASS (Refused) | N/A | Correct refusal -- UBER not in corpus |
-| What is the current stock price of NVIDIA? (ADV-001) | PASS (Refused) | N/A | Correct refusal -- stock prices not in SEC filings |
+| Question | Outcome | Notes |
+|----------|---------|-------|
+| Compare risk factors of Apple and Pfizer | PASS | Cross-company comparison with cited sections |
+| What was Uber's total gross bookings for FY2024? | PASS (Refused) | Correct refusal — UBER not in corpus |
+| What is the current stock price of NVIDIA? | PASS (Refused) | Correct refusal — not answerable from SEC filings |
 
 ---
 
 ## 5. Phase 2 Roadmap
 
-If phase 1 proves the trust bar is met, here's what we'd propose next:
+If Phase 1 proves the trust bar is met, next steps would be:
 
-**Conversational context** — Enable follow-up questions ("What about their revenue?" after asking about risk factors). The data model supports it. Requires passing conversation history into the prompt.
+- **Conversational context** — support follow-up questions across turns
+- **Cross-document temporal analysis** — more robust year-over-year comparisons across multiple filings
+- **Hierarchical retrieval** — coarse-to-fine retrieval for deeply nested exact facts
+- **Auth / SSO / RBAC** — production access control
+- **Scheduled corpus refresh** — batch or connector-driven updates
+- **Telemetry / monitoring hardening** — production quality and cost monitoring
 
-**MCP server delivery** — Instead of a standalone app, deliver as an MCP server with OAuth so the client accesses it through Claude or ChatGPT. No new app to maintain. This is the direction we're seeing across PE clients.
-
-**Cross-document analysis** — "Compare NVIDIA's risk factors across 2023, 2024, and 2025." Requires retrieval across multiple filings for the same company with temporal awareness.
-
-**Hierarchical retrieval** — Two-stage coarse-to-fine retrieval: keep 2000-char coarse chunks for broad context, add query-time fine-span extraction (350-700 chars) with lexical reranking for fact-heavy questions. Eliminates the need for small global chunks while precisely surfacing specific metrics (revenue figures, asset totals). Designed but deferred from the assessment build due to time constraints.
-
-**Telemetry dashboard** — Production monitoring of query quality, latency, cost, and refusal rates via Langfuse (already instrumented). Ensures the system maintains trust bar over time.
-
-**Estimated phase 2 scope:** 4-6 weeks with a 2-person team.
+**Estimated Phase 2 scope:** 4–6 weeks with a small team.
 
 ---
 
-## How to Use This Brief in the Panel
+## 6. Panel Walkthrough Plan
 
-### Before you open the laptop (2 minutes)
+### Before opening the laptop
+Frame the problem in 60–90 seconds:
+- high-trust-bar use case
+- static SEC corpus
+- one-question-in / one-answer-out
+- answer must be grounded or refused
 
-"Before I show you the system, let me frame the problem and approach. [Walk through sections 1-3 verbally. Don't read it. Summarize it.]"
-
-Key lines to hit:
-- "This is a high-trust-bar problem. Wrong answers about SEC data have real consequences."
-- "I scoped this as a phase-1 proof of value. Smallest trustworthy solution."
-- "Every answer cites the filing, company, and section, or the system refuses."
-
-### Demo (3-4 minutes)
-
+### Demo
 Show three queries:
-1. A cross-company comparison (matches their sample questions)
-2. A single-company financial question
-3. An out-of-scope question (show refusal behavior)
+1. a cross-company comparison
+2. a single-company business question
+3. an out-of-scope / refusal case
 
-### After the demo (2 minutes)
-
-"Here are the eval results. [Walk through section 4.] I tested 20 questions (13 golden + 7 adversarial) including adversarial cases. Here's what passed, here's what I'd improve."
-
-### Tradeoffs and next steps (2 minutes)
-
-"Here's what I intentionally did not build and why. [Section 3 table.] And here's what phase 2 would look like. [Section 5.]"
-
-### Then stop talking. Let them come to you.
+### After the demo
+Summarize:
+- why the architecture is trustworthy
+- how the single-call constraint is enforced
+- what the eval set covered
+- what was intentionally deferred
 
 ---
 
-## Decision Log (Required Deliverable)
+## 7. Key Decisions Summary
 
-| Decision | Reasoning | Alternative considered |
-|----------|-----------|----------------------|
-| Section-based chunking over sliding window | SEC filings have standard Item structure. Preserving section boundaries improves retrieval quality for questions about specific topics | Token-based sliding window — simpler but loses section context |
-| Hybrid search (BM25 + vector) over vector-only | Financial terms, ticker symbols, and dollar amounts benefit from lexical matching. Semantic search alone misses exact-match terms | Vector-only — faster but misses lexical precision |
-| Confidence threshold at 0.70 | Empirically tuned against golden set. Below 0.70, noise ratio increased significantly | No threshold — returns results regardless of quality |
-| Strip XBRL before chunking | XBRL is structured financial data encoded for machine parsing, not natural language. Including it pollutes embeddings and retrieval | Include everything — simpler but degrades retrieval quality |
-| Structured JSON output with citations array | Enforces citation at the schema level, not just prompt level. Makes validation possible | Free-text output — harder to validate citations programmatically |
-| Fail-closed on low confidence | A wrong answer about SEC data could inform a bad investment decision. Refusal is safer than hallucination | Fail-open — answers everything but risk of hallucination |
+| Decision | Reasoning |
+|----------|-----------|
+| Section-based chunking | Preserves SEC filing semantics better than generic sliding windows |
+| Hybrid retrieval | Financial questions benefit from both lexical and semantic recall |
+| No hard RRF threshold in demo build | RRF is not a calibrated confidence score |
+| Citation-first output | Trust requires inspectable provenance |
+| Explicit confidence + refusal on insufficient evidence | Safer than fabricating an answer in a high-trust use case |
+| Scoped evaluation | Better to present a truthful demo-scoped eval than overclaim coverage |
 
 ---
 
-## Prompt Iteration Log (Required Deliverable)
+## 8. Prompt Iteration Summary
 
 | Version | Change | Why | Result |
 |---------|--------|-----|--------|
-| v1 | Initial prompt: "Answer based on context" | Baseline | Answers were too generic, weak citations |
-| v2 | Added structured JSON output requirement | Force citation structure | Citations improved but sometimes hallucinated quotes |
-| v3 | Added "cite specific filing, company, section" instruction | Ground citations in metadata | Citations now reference specific filings |
-| v4 | Added refusal instruction for insufficient evidence | Fail-closed behavior | System correctly refuses out-of-scope questions |
-| v5 | Added "compare across companies" instruction for cross-company queries | Handle multi-company questions | Cross-company answers improved |
-
-*[Fill in actual iterations as you build]*
+| v1 | Basic answer-from-context prompt | Establish baseline | Weak citation behavior |
+| v2 | Structured JSON output | Enforce answer shape | Better answer structure |
+| v3 | Filing/date/section citation instructions | Make citations inspectable | Better provenance |
+| v4 | Refusal instructions for insufficient evidence | Strengthen fail-closed behavior | Better out-of-scope handling |
+| v5 | Cross-company comparison formatting + stronger evidence rules | Improve comparison answers | Stronger comparison structure |
+| v6 | Confidence semantics aligned to runtime behavior | Match prompt, backend, and UI | Low-confidence answers are labeled consistently |
+| v7 | Flat multi-company output contract | Keep API and UI citations stable | Nested company JSON is prevented and normalized |
