@@ -124,11 +124,22 @@ class RetrievalIndex:
     known_companies: dict[str, str] = field(default_factory=dict)
     ticker_to_indices: dict[str, list[int]] = field(default_factory=dict)
 
+    # Lazy cache for per-ticker sub-indexes
+    _ticker_subindexes: dict[str, "RetrievalIndex"] = field(default_factory=dict, repr=False)
+
     def __post_init__(self) -> None:
         """Precompute all indices from chunks."""
         self._build_bm25_index()
         self._build_embedding_matrix()
         self._build_company_index()
+
+    def get_ticker_subindex(self, ticker: str, chunks: list[Chunk]) -> "RetrievalIndex":
+        """Return cached per-ticker sub-index, building on first access."""
+        if ticker not in self._ticker_subindexes:
+            indices = self.ticker_to_indices.get(ticker, [])
+            ticker_chunks = [chunks[i] for i in indices]
+            self._ticker_subindexes[ticker] = RetrievalIndex(ticker_chunks)
+        return self._ticker_subindexes[ticker]
 
     def _build_bm25_index(self) -> None:
         """Tokenize all chunks once, compute df and avg_dl."""
@@ -221,9 +232,11 @@ def _vector_search(
     chunks: list[Chunk],
     top_k: int,
     index: RetrievalIndex | None = None,
+    query_embedding: list[float] | None = None,
 ) -> list[dict]:
     """Cosine similarity search using precomputed embedding matrix."""
-    query_embedding = traced_embedding([query], label="query_embed")[0]
+    if query_embedding is None:
+        query_embedding = traced_embedding([query], label="query_embed")[0]
     query_vec = np.array(query_embedding, dtype=np.float32)
     query_norm = np.linalg.norm(query_vec)
 
@@ -430,7 +443,7 @@ def retrieve(
         ticker_indices = index.ticker_to_indices.get(ticker, [])
         if ticker_indices:
             ticker_chunks = [chunks[i] for i in ticker_indices]
-            sub_index = RetrievalIndex(ticker_chunks)
+            sub_index = index.get_ticker_subindex(ticker, chunks)
             logger.info("Single-ticker retrieval: %s (%d chunks)", ticker, len(ticker_chunks))
             return _single_retrieve(query, ticker_chunks, top_k, threshold, sub_index)
 
@@ -444,9 +457,12 @@ def _single_retrieve(
     top_k: int,
     threshold: float,
     index: RetrievalIndex,
+    query_embedding: list[float] | None = None,
 ) -> list[dict]:
     """Standard global top-k retrieval."""
-    vector_results = _vector_search(query, chunks, top_k * 2, index)
+    if query_embedding is None:
+        query_embedding = traced_embedding([query], label="query_embed")[0]
+    vector_results = _vector_search(query, chunks, top_k * 2, index, query_embedding=query_embedding)
     bm25_results = _bm25_search(query, chunks, top_k * 2, index)
     fused = _rrf_fuse(vector_results, bm25_results, k=60)
 
@@ -479,6 +495,9 @@ def _multi_company_retrieve(
     per_ticker_k = max(2, math.ceil(top_k / len(tickers)))
     all_results: list[dict] = []
 
+    # Embed query once for all tickers
+    query_embedding = traced_embedding([query], label="query_embed")[0]
+
     for ticker in tickers:
         ticker_indices = index.ticker_to_indices.get(ticker, [])
         if not ticker_indices:
@@ -486,10 +505,13 @@ def _multi_company_retrieve(
 
         ticker_chunks = [chunks[i] for i in ticker_indices]
 
-        # Build a temporary sub-index for this ticker's chunks
-        sub_index = RetrievalIndex(ticker_chunks)
+        # Use cached per-ticker sub-index
+        sub_index = index.get_ticker_subindex(ticker, chunks)
 
-        vector_results = _vector_search(query, ticker_chunks, per_ticker_k * 2, sub_index)
+        vector_results = _vector_search(
+            query, ticker_chunks, per_ticker_k * 2, sub_index,
+            query_embedding=query_embedding,
+        )
         bm25_results = _bm25_search(query, ticker_chunks, per_ticker_k * 2, sub_index)
         fused = _rrf_fuse(vector_results, bm25_results, k=60)
 
