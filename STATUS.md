@@ -43,10 +43,10 @@ _Only list what has been verified end-to-end._
 - [x] DECISIONS.md updated with 20+ timestamped entries
 - [x] Ingestion pipeline: SEC-aware chunking, XBRL stripping, metadata parsing (11 tests)
 - [x] Retrieval: precomputed BM25, vectorized search, multi-company detection, neighbor-aware chunk expansion (20 tests)
-- [x] Generation: prompt V7, cite-or-refuse backstop, nested-output normalization (11 tests)
+- [x] Generation: prompt V7, cite-or-refuse backstop, nested-output normalization (4 tests)
 - [x] Citation validation: Jaccard similarity + span check (8 tests)
-- [x] Pipeline + API wired end-to-end with FastAPI lifespan (4 tests)
-- [x] 52 unit tests passing, lint clean
+- [x] Pipeline + API wired end-to-end with FastAPI lifespan (10 tests)
+- [x] 53 unit tests passing, lint clean
 - [x] .env.example with all environment variables
 - [x] API key scrubbed from git history
 - [x] Local test script: scripts/test_local.sh
