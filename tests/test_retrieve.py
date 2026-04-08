@@ -181,6 +181,25 @@ class TestDetectQueryTickers:
         result = detect_query_tickers("What is the meaning of life?", known_tickers, known_companies)
         assert result == []
 
+    def test_detects_exxon_aliases(self) -> None:
+        """'Exxon' and 'ExxonMobil' should resolve to XOM when the ticker is known."""
+        known_tickers = {"XOM"}
+        known_companies = {"Exxon Mobil Corporation": "XOM"}
+
+        exxon_result = detect_query_tickers(
+            "What regulatory risks does Exxon face?",
+            known_tickers,
+            known_companies,
+        )
+        exxon_mobil_result = detect_query_tickers(
+            "What competitive risks does ExxonMobil face?",
+            known_tickers,
+            known_companies,
+        )
+
+        assert exxon_result == ["XOM"]
+        assert exxon_mobil_result == ["XOM"]
+
 
 # ---------------------------------------------------------------------------
 # RetrievalIndex
@@ -288,14 +307,17 @@ class TestMultiCompanyRetrieval:
 class TestAdjacentChunkRecovery:
     """Neighbor expansion should pull in adjacent same-doc/same-section chunks."""
 
+    @patch("src.retrieve.traced_embedding")
     @patch("src.retrieve._vector_search")
     @patch("src.retrieve._bm25_search")
     def test_includes_immediate_same_doc_section_neighbor(
         self,
         mock_bm25_search,
         mock_vector_search,
+        mock_embed,
     ) -> None:
         """If the answer chunk sits next to the top hit, retrieval should keep both."""
+        mock_embed.return_value = [[1.0, 0.0, 0.0]]
         answer_chunk = _make_chunk(
             "nvda-205",
             "Revenue for fiscal year 2025 was $130.5 billion.",
@@ -327,14 +349,17 @@ class TestAdjacentChunkRecovery:
         assert "nvda-206" in ids
         assert "nvda-205" in ids
 
+    @patch("src.retrieve.traced_embedding")
     @patch("src.retrieve._vector_search")
     @patch("src.retrieve._bm25_search")
     def test_does_not_cross_document_or_section_boundaries(
         self,
         mock_bm25_search,
         mock_vector_search,
+        mock_embed,
     ) -> None:
         """Neighbor expansion should not pull in chunks from another doc or section."""
+        mock_embed.return_value = [[1.0, 0.0, 0.0]]
         top_hit_chunk = _make_chunk(
             "nvda-206",
             "The strong year-on-year growth was driven by Hopper demand.",
@@ -375,14 +400,17 @@ class TestAdjacentChunkRecovery:
         assert "nvda-205" not in ids
         assert "nvda-207" not in ids
 
+    @patch("src.retrieve.traced_embedding")
     @patch("src.retrieve._vector_search")
     @patch("src.retrieve._bm25_search")
     def test_wider_candidate_window_includes_ranked_out_chunk(
         self,
         mock_bm25_search,
         mock_vector_search,
+        mock_embed,
     ) -> None:
         """A wider pre-fusion window should surface a relevant chunk that rank-10 misses."""
+        mock_embed.return_value = [[1.0, 0.0, 0.0]]
         target_chunk = _make_chunk(
             "nvda-target",
             "Revenue for fiscal year 2025 was $130.5 billion.",
@@ -417,6 +445,217 @@ class TestAdjacentChunkRecovery:
 
         ids = [r["chunk"].chunk_id for r in results]
         assert "nvda-target" in ids
+
+
+# ---------------------------------------------------------------------------
+# Most recent filing intent
+# ---------------------------------------------------------------------------
+
+
+class TestMostRecentFilingIntent:
+    """Single-company queries asking for the most recent 10-K should prefer the latest filing."""
+
+    @staticmethod
+    def _return_input_chunks(*args, **kwargs) -> list[dict]:
+        """Return the exact chunk list passed into the mocked retrieval helper."""
+        chunks = args[1]
+        method = "vector" if len(args) > 3 else "bm25"
+        return [
+            {"chunk": chunk, "score": 1.0 - i * 0.01, "method": method}
+            for i, chunk in enumerate(chunks)
+        ]
+
+    @patch("src.retrieve.traced_embedding")
+    @patch("src.retrieve._vector_search")
+    @patch("src.retrieve._bm25_search")
+    def test_most_recent_10k_prefers_latest_filing(
+        self,
+        mock_bm25_search,
+        mock_vector_search,
+        mock_embed,
+    ) -> None:
+        """A query mentioning the most recent 10-K should not return older 10-K or 10-Q chunks."""
+        latest_10k = _make_chunk(
+            "xom-2026-1a",
+            "ExxonMobil’s financial and operating results are subject to a variety of risks.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10K_2026-02-18_full.txt",
+            filing_type="10-K",
+            filing_date="2026-02-18",
+            section_name="Item 1A",
+        )
+        older_10k = _make_chunk(
+            "xom-2025-1a",
+            "ExxonMobil’s financial and operating results are subject to a variety of risks.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10K_2025-02-19_full.txt",
+            filing_type="10-K",
+            filing_date="2025-02-19",
+            section_name="Item 1A",
+        )
+        quarterly_noise = _make_chunk(
+            "xom-10q",
+            "Item 6 exhibits and other filing boilerplate.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10Q_2025-08-01_full.txt",
+            filing_type="10-Q",
+            filing_date="2025-08-01",
+            section_name="Part II - Item 6",
+        )
+        chunks = [latest_10k, older_10k, quarterly_noise]
+        idx = RetrievalIndex(chunks)
+        mock_embed.return_value = [[1.0, 0.0, 0.0]]
+
+        mock_vector_search.return_value = [
+            {"chunk": older_10k, "score": 0.99, "method": "vector"},
+            {"chunk": quarterly_noise, "score": 0.98, "method": "vector"},
+            {"chunk": latest_10k, "score": 0.10, "method": "vector"},
+        ]
+        mock_bm25_search.return_value = [
+            {"chunk": older_10k, "score": 12.0, "method": "bm25"},
+            {"chunk": quarterly_noise, "score": 11.5, "method": "bm25"},
+            {"chunk": latest_10k, "score": 1.0, "method": "bm25"},
+        ]
+
+        results = retrieve(
+            "What regulatory and competitive risks does XOM face according to its most recent 10-K filing?",
+            chunks=chunks,
+            index=idx,
+            top_k=5,
+        )
+
+        assert results, "Expected retrieval to return at least one chunk"
+        assert {r["chunk"].filing_type for r in results} == {"10-K"}
+        assert {r["chunk"].filing_date for r in results} == {"2026-02-18"}
+        assert all(r["chunk"].doc_name == "XOM_10K_2026-02-18_full.txt" for r in results)
+
+    @patch("src.retrieve.traced_embedding")
+    @patch("src.retrieve._vector_search")
+    @patch("src.retrieve._bm25_search")
+    def test_latest_10k_and_10q_preserves_both_filing_types(
+        self,
+        mock_bm25_search,
+        mock_vector_search,
+        mock_embed,
+    ) -> None:
+        """Queries naming both 10-K and 10-Q should keep the latest filing of each type."""
+        latest_10k = _make_chunk(
+            "xom-2026-10k",
+            "Latest annual filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10K_2026-02-18_full.txt",
+            filing_type="10-K",
+            filing_date="2026-02-18",
+            section_name="Item 1A",
+        )
+        older_10k = _make_chunk(
+            "xom-2025-10k",
+            "Older annual filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10K_2025-02-19_full.txt",
+            filing_type="10-K",
+            filing_date="2025-02-19",
+            section_name="Item 1A",
+        )
+        latest_10q = _make_chunk(
+            "xom-2026-10q",
+            "Latest quarterly filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10Q_2026-05-01_full.txt",
+            filing_type="10-Q",
+            filing_date="2026-05-01",
+            section_name="Part II - Item 1A",
+        )
+        older_10q = _make_chunk(
+            "xom-2025-10q",
+            "Older quarterly filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10Q_2025-08-01_full.txt",
+            filing_type="10-Q",
+            filing_date="2025-08-01",
+            section_name="Part II - Item 1A",
+        )
+        chunks = [latest_10k, older_10k, latest_10q, older_10q]
+        idx = RetrievalIndex(chunks)
+        mock_embed.return_value = [[1.0, 0.0, 0.0]]
+        mock_vector_search.side_effect = self._return_input_chunks
+        mock_bm25_search.side_effect = self._return_input_chunks
+
+        results = retrieve(
+            "Compare Exxon's latest 10-K and latest 10-Q risk factors.",
+            chunks=chunks,
+            index=idx,
+            top_k=5,
+        )
+
+        assert results, "Expected retrieval to return at least one chunk"
+        assert {r["chunk"].filing_type for r in results} == {"10-K", "10-Q"}
+        assert {r["chunk"].filing_date for r in results} == {"2026-02-18", "2026-05-01"}
+
+    @patch("src.retrieve.traced_embedding")
+    @patch("src.retrieve._vector_search")
+    @patch("src.retrieve._bm25_search")
+    def test_explicit_historical_period_disables_latest_only_scoping(
+        self,
+        mock_bm25_search,
+        mock_vector_search,
+        mock_embed,
+    ) -> None:
+        """A latest-vs-historical comparison should keep both filing dates in scope."""
+        latest_10k = _make_chunk(
+            "xom-2026-10k",
+            "Latest annual filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10K_2026-02-18_full.txt",
+            filing_type="10-K",
+            filing_date="2026-02-18",
+            section_name="Item 1A",
+        )
+        historical_10k = _make_chunk(
+            "xom-2025-10k",
+            "Historical annual filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10K_2025-02-19_full.txt",
+            filing_type="10-K",
+            filing_date="2025-02-19",
+            section_name="Item 1A",
+        )
+        quarterly_noise = _make_chunk(
+            "xom-10q",
+            "Quarterly filing risk discussion.",
+            ticker="XOM",
+            company="Exxon Mobil Corporation",
+            doc_name="XOM_10Q_2026-05-01_full.txt",
+            filing_type="10-Q",
+            filing_date="2026-05-01",
+            section_name="Part II - Item 1A",
+        )
+        chunks = [latest_10k, historical_10k, quarterly_noise]
+        idx = RetrievalIndex(chunks)
+        mock_embed.return_value = [[1.0, 0.0, 0.0]]
+        mock_vector_search.side_effect = self._return_input_chunks
+        mock_bm25_search.side_effect = self._return_input_chunks
+
+        results = retrieve(
+            "How does Exxon's most recent 10-K differ from its 2025 10-K risk discussion?",
+            chunks=chunks,
+            index=idx,
+            top_k=5,
+        )
+
+        assert results, "Expected retrieval to return at least one chunk"
+        assert {r["chunk"].filing_type for r in results} == {"10-K"}
+        assert {r["chunk"].filing_date for r in results} == {"2026-02-18", "2025-02-19"}
+
 
 
 # ---------------------------------------------------------------------------

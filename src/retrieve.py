@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -46,6 +47,9 @@ _COMPANY_ALIASES: dict[str, str] = {
     "google": "GOOGL",
     "alphabet": "GOOGL",
     "meta": "META",
+    "exxon": "XOM",
+    "exxon mobil": "XOM",
+    "exxonmobil": "XOM",
 }
 
 
@@ -87,6 +91,65 @@ def detect_query_tickers(
             found.add(ticker)
 
     return sorted(found)
+
+
+def _requested_filing_types(query: str) -> set[str]:
+    """Infer any requested filing types from the query text."""
+    query_lower = query.lower()
+    requested: set[str] = set()
+    if "10-k" in query_lower or "10k" in query_lower:
+        requested.add("10-K")
+    if "10-q" in query_lower or "10q" in query_lower:
+        requested.add("10-Q")
+    return requested
+
+
+def _requests_latest_filing(query: str) -> bool:
+    """Return True when the query explicitly asks for the latest filing."""
+    query_lower = query.lower()
+    return any(phrase in query_lower for phrase in ("most recent", "latest", "newest"))
+
+
+def _has_explicit_period_reference(query: str) -> bool:
+    """Return True when the query names a specific historical period or filing year."""
+    return bool(re.search(r"\b20\d{2}\b", query))
+
+
+def _scope_chunks_for_query(query: str, chunks: list[Chunk]) -> list[Chunk]:
+    """Narrow retrieval to the requested filing type or latest filing when explicit."""
+    scoped = chunks
+
+    filing_types = _requested_filing_types(query)
+    if filing_types:
+        type_filtered = [chunk for chunk in scoped if chunk.filing_type.upper() in filing_types]
+        if type_filtered:
+            scoped = type_filtered
+
+    if _requests_latest_filing(query) and not _has_explicit_period_reference(query):
+        dated_chunks = [chunk for chunk in scoped if chunk.filing_date]
+        if dated_chunks:
+            if len(filing_types) > 1:
+                latest_by_type = {
+                    filing_type: max(
+                        chunk.filing_date
+                        for chunk in dated_chunks
+                        if chunk.filing_type.upper() == filing_type
+                    )
+                    for filing_type in filing_types
+                    if any(chunk.filing_type.upper() == filing_type for chunk in dated_chunks)
+                }
+                latest_filtered = [
+                    chunk
+                    for chunk in dated_chunks
+                    if latest_by_type.get(chunk.filing_type.upper()) == chunk.filing_date
+                ]
+            else:
+                latest_date = max(chunk.filing_date for chunk in dated_chunks)
+                latest_filtered = [chunk for chunk in dated_chunks if chunk.filing_date == latest_date]
+            if latest_filtered:
+                scoped = latest_filtered
+
+    return scoped
 
 
 # ---------------------------------------------------------------------------
@@ -533,9 +596,19 @@ def retrieve(
         ticker_indices = index.ticker_to_indices.get(ticker, [])
         if ticker_indices:
             ticker_chunks = [chunks[i] for i in ticker_indices]
-            sub_index = index.get_ticker_subindex(ticker, chunks)
-            logger.info("Single-ticker retrieval: %s (%d chunks)", ticker, len(ticker_chunks))
-            return _single_retrieve(query, ticker_chunks, top_k, threshold, sub_index)
+            scoped_chunks = _scope_chunks_for_query(query, ticker_chunks)
+            if len(scoped_chunks) != len(ticker_chunks):
+                sub_index = RetrievalIndex(scoped_chunks)
+                logger.info(
+                    "Single-ticker retrieval scoped by filing intent: %s (%d -> %d chunks)",
+                    ticker,
+                    len(ticker_chunks),
+                    len(scoped_chunks),
+                )
+            else:
+                sub_index = index.get_ticker_subindex(ticker, chunks)
+                logger.info("Single-ticker retrieval: %s (%d chunks)", ticker, len(ticker_chunks))
+            return _single_retrieve(query, scoped_chunks, top_k, threshold, sub_index)
 
     # No ticker detected — global retrieval
     return _single_retrieve(query, chunks, top_k, threshold, index)
@@ -596,16 +669,20 @@ def _multi_company_retrieve(
             continue
 
         ticker_chunks = [chunks[i] for i in ticker_indices]
+        scoped_chunks = _scope_chunks_for_query(query, ticker_chunks)
 
-        # Use cached per-ticker sub-index
-        sub_index = index.get_ticker_subindex(ticker, chunks)
+        # Use cached per-ticker sub-index unless filing intent narrows the set.
+        if len(scoped_chunks) != len(ticker_chunks):
+            sub_index = RetrievalIndex(scoped_chunks)
+        else:
+            sub_index = index.get_ticker_subindex(ticker, chunks)
         candidate_pool = _candidate_pool_size(per_ticker_k)
 
         vector_results = _vector_search(
-            query, ticker_chunks, candidate_pool, sub_index,
+            query, scoped_chunks, candidate_pool, sub_index,
             query_embedding=query_embedding,
         )
-        bm25_results = _bm25_search(query, ticker_chunks, candidate_pool, sub_index)
+        bm25_results = _bm25_search(query, scoped_chunks, candidate_pool, sub_index)
         fused = _rrf_fuse(vector_results, bm25_results, k=60)
 
         # Take per_ticker_k from this company
