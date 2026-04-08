@@ -80,11 +80,38 @@ frontend/
 | Example request | See below |
 | Quality evaluation notes | `DECISIONS.md`, `TECHNICAL_NOTES.md`, and `evals/` |
 
-## Example Request
+## API
+
+Start the server:
+```bash
+uv run uvicorn src.api:app --reload --port 8000
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/v1/ask` | Ask a question — returns answer + citations |
+| GET | `/healthz` | Status + chunk count |
+| GET | `/v1/telemetry` | LLM call log (latency, tokens, cost) |
+| GET | `/docs` | Swagger UI (interactive API docs) |
+
+### Example requests
 
 ```bash
-curl -X POST http://localhost:8000/v1/ask   -H "Content-Type: application/json"   -d '{"question": "What are the primary risk factors facing Apple and how have they changed over the past two years?"}'
+# Ask a question
+curl -X POST http://localhost:8000/v1/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the primary risk factors facing Apple?"}'
+
+# Health check
+curl http://localhost:8000/healthz
+
+# View telemetry
+curl http://localhost:8000/v1/telemetry
 ```
+
+Or open http://localhost:8000/docs in a browser for the Swagger UI.
 
 ## Quality Checks
 
