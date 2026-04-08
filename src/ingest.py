@@ -165,8 +165,31 @@ def strip_xbrl(lines: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _is_toc_line(line: str) -> bool:
-    """Return True if line looks like a Table of Contents entry (has | separator)."""
-    return "|" in line
+    """Return True if line looks like a Table of Contents entry.
+
+    After normalize_text() strips pipes, TOC lines are identifiable by
+    having a trailing page number (1-4 digits at end of line).
+    """
+    stripped = line.strip()
+    if not stripped:
+        return False
+    # TOC pattern: line ends with a standalone page number
+    return bool(re.search(r"\s\d{1,4}$", stripped))
+
+
+def normalize_text(text: str) -> str:
+    """Clean text artifacts from HTML-to-text SEC filing conversion.
+
+    Removes pipe delimiters (from HTML table cells), unicode replacement
+    characters, and collapses whitespace. Run before section splitting.
+    """
+    # Replace pipe delimiters with spaces (from HTML table cells)
+    text = text.replace("|", " ")
+    # Replace unicode replacement character
+    text = text.replace("\ufffd", " ")
+    # Collapse multiple spaces to single (but preserve newlines)
+    text = re.sub(r"[^\S\n]+", " ", text)
+    return text
 
 
 def _normalize_section_name(match_text: str) -> str:
@@ -184,10 +207,13 @@ def split_sections(text: str, filing_type: str) -> list[dict[str, Any]]:
     """
     Split filing text into sections by Item headers.
 
-    Skips TOC lines (contain | and page numbers).
+    Skips TOC lines (trailing page numbers).
     For 10-Q, tracks current Part (I/II) for namespacing.
     Returns list of {"section_name": str, "text": str, "char_start": int, "char_end": int}.
     """
+    # Clean pipes, unicode artifacts, and collapse whitespace
+    text = normalize_text(text)
+
     # Pre-normalize: insert newlines before Item headers that appear mid-line.
     # SEC .txt files often have sections concatenated on single long lines
     # with patterns like "35Table of ContentsItem 7." or "applicable.Item 1B."
@@ -199,6 +225,8 @@ def split_sections(text: str, filing_type: str) -> list[dict[str, Any]]:
     text = re.sub(r"(\d)((?:Item|ITEM)\s*\d+[A-C]?\.?\s)", r"\1\n\2", text)
     text = re.sub(r"(Table of Contents)((?:Item|ITEM)\s*\d+[A-C]?\.?\s)", r"\1\n\2", text)
     text = re.sub(r"(\.)(?=(?:Item|ITEM)\s*\d+[A-C]?\.?\s)", r".\n", text)
+    # Catch cases like "ReservedItem 7." where a word runs into Item header
+    text = re.sub(r"([a-z])((?:Item|ITEM)\s+\d+[A-C]?\.?\s)", r"\1\n\2", text)
     # Also insert newlines before Part headers mid-line
     text = re.sub(r"(?<=\S)((?:PART|Part)\s+(?:I{1,2}|[12])\b)", r"\n\1", text)
     lines = text.split("\n")
