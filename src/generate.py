@@ -83,15 +83,12 @@ def generate_answer(question: str, retrieved: list[dict]) -> dict:
     # Normalize confidence to lowercase to prevent case-mismatch bypass
     parsed["confidence"] = str(parsed.get("confidence", "low")).lower().strip()
 
-    # Confidence backstop: low confidence with an answer → force refusal
+    # Confidence backstop: low confidence → flag but still return the answer.
+    # Transparency over silent refusal — the UI shows the confidence level.
+    # Only force refusal when the LLM itself returned answer=null.
     if parsed["confidence"] == "low" and parsed.get("answer") is not None:
-        logger.warning("Confidence backstop triggered: forcing refusal for low-confidence answer")
-        parsed["answer"] = None
-        parsed["citations"] = []
-        parsed["refusal_reason"] = (
-            parsed.get("refusal_reason")
-            or "Insufficient confidence to provide a reliable answer."
-        )
+        logger.warning("Low confidence answer — flagging but not refusing")
+        parsed.setdefault("_warning", "Low confidence: answer may be incomplete or imprecise.")
 
     # Add telemetry metadata
     parsed["_telemetry"] = {
