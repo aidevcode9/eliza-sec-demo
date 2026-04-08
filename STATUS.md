@@ -48,12 +48,14 @@ _Only list what has been verified end-to-end._
 - [x] .env.example with all environment variables
 - [x] API key scrubbed from git history
 - [x] Local test script: scripts/test_local.sh
+- [x] Streamlit frontend built and headless launch verified (`uv run streamlit run frontend/app.py`)
+- [x] Frontend pipeline path exercised for cross-company answer and out-of-scope refusal
 
 ### Not working yet
 
 - [ ] Corpus not ingested (code ready, needs OPENAI_API_KEY to embed)
 - [ ] Pipeline + API not wired end-to-end
-- [ ] Frontend not built
+- [ ] NVIDIA FY2025 revenue retrieval still misses the best evidence chunk in the current index
 - [ ] Eval results not generated (need ingested corpus)
 
 ### Known risks
@@ -104,7 +106,7 @@ _Keep this brutally short and current._
 | Indexing/retrieval code | src/ | ⬜ Scaffolded |
 | Prompt iteration log | PROMPT_LOG.md | ✅ Template |
 | Final prompt template | src/generate.py | ⬜ Scaffolded |
-| Frontend | frontend/app.py | ⬜ Not started |
+| Frontend | frontend/app.py | ✅ Built + runnable |
 | Example request | README.md curl | ⬜ Not tested |
 | Quality evaluation notes | DECISIONS.md + evals/ | ⬜ Placeholder |
 
