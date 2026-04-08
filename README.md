@@ -26,7 +26,7 @@ unzip edgar_corpus.zip -d data/
 uv run python -m src.ingest
 
 # Run evals
-uv run python evals/runner.py
+uv run python -m evals.runner
 
 # Start API
 uv run uvicorn src.api:app --reload --port 8000
@@ -117,7 +117,7 @@ Or open http://localhost:8000/docs in a browser for the Swagger UI.
 
 ```bash
 uv run ruff check src/              # Lint
-uv run python evals/runner.py       # Report current scoped golden + adversarial results
+uv run python -m evals.runner       # Report current scoped golden + adversarial results
 ```
 
 ## Key Design Decisions
