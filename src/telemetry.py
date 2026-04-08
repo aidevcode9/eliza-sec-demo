@@ -106,15 +106,16 @@ def traced_llm_call(
         lf = get_langfuse()
         if lf:
             try:
-                trace = lf.trace(name=label)
-                trace.generation(
+                gen = lf.start_observation(
                     name=label,
+                    as_type="generation",
                     model=model,
                     input=messages,
                     output=result["content"],
-                    usage={"input": result["tokens_in"], "output": result["tokens_out"]},
+                    usage_details={"input": result["tokens_in"], "output": result["tokens_out"]},
                     metadata={"latency_ms": result["latency_ms"]},
                 )
+                gen.end()
             except Exception as e:
                 logger.warning("Langfuse generation logging failed: %s", e)
 
@@ -156,13 +157,14 @@ def traced_embedding(texts: list[str], label: str = "embed") -> list[list[float]
     lf = get_langfuse()
     if lf:
         try:
-            trace = lf.trace(name=label)
-            trace.span(
+            span = lf.start_observation(
                 name=label,
+                as_type="embedding",
                 input={"text_count": len(texts)},
                 output={"embedding_count": len(embeddings)},
                 metadata={"latency_ms": round(latency_ms, 1)},
             )
+            span.end()
         except Exception as e:
             logger.warning("Langfuse embedding span logging failed: %s", e)
 
@@ -190,9 +192,9 @@ def reset_call_log() -> None:
 
 
 def shutdown_telemetry() -> None:
-    """Flush Langfuse buffer on shutdown."""
+    """Flush and shutdown Langfuse on exit."""
     if _langfuse is not None:
         try:
-            _langfuse.flush()
+            _langfuse.shutdown()
         except Exception as e:
-            logger.warning("Langfuse flush failed: %s", e)
+            logger.warning("Langfuse shutdown failed: %s", e)
