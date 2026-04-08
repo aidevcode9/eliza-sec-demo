@@ -120,6 +120,45 @@ class TestGenerateAnswerSchema:
         assert result["confidence"] == "high"
 
     @patch("src.generate.traced_llm_call")
+    def test_answer_object_with_nested_company_json_is_normalized(self, mock_llm) -> None:
+        """An object-valued answer field should still flatten into text and citations."""
+        mock_llm.return_value = {
+            "content": (
+                "{"
+                '"answer":{'
+                '"AAPL":{"answer":"Apple emphasizes market and credit risk.",'
+                '"citations":[{"ticker":"AAPL","filing_type":"10-K","filing_date":"2024-11-01",'
+                '"section":"Item 1A","doc_name":"AAPL_10K_2024-11-01_full.txt",'
+                '"quoted_text":"Apple emphasizes market and credit risk."}],"confidence":"high",'
+                '"refusal_reason":null},'
+                '"PFE":{"answer":"Pfizer emphasizes foreign exchange and interest rate risk.",'
+                '"citations":[{"ticker":"PFE","filing_type":"10-Q","filing_date":"2025-02-15",'
+                '"section":"Part I - Item 1A","doc_name":"PFE_10Q_2025-02-15_full.txt",'
+                '"quoted_text":"Pfizer emphasizes foreign exchange and interest rate risk."}],"confidence":"high",'
+                '"refusal_reason":null},'
+                '"comparative_summary":"Apple emphasizes market and credit risk, '
+                'while Pfizer emphasizes foreign exchange and interest rate risk."'
+                '},'
+                '"citations":[],"confidence":"high","refusal_reason":null'
+                "}"
+            ),
+            "model": "gpt-5.4-mini",
+            "tokens_in": 100,
+            "tokens_out": 150,
+            "latency_ms": 10,
+        }
+
+        result = generate_answer("Compare Apple and Pfizer risk factors.", _retrieved_chunks())
+
+        assert isinstance(result["answer"], str)
+        assert result["answer"].strip().startswith("AAPL")
+        assert "PFE" in result["answer"]
+        assert "comparative summary" in result["answer"].lower()
+        assert result["citations"], "Nested citations should be merged into the top-level array"
+        assert {c["ticker"] for c in result["citations"]} == {"AAPL", "PFE"}
+        assert result["confidence"] == "high"
+
+    @patch("src.generate.traced_llm_call")
     def test_stringified_nested_json_in_answer_is_normalized(self, mock_llm) -> None:
         """Stringified nested JSON inside answer should be flattened into readable text."""
         mock_llm.return_value = {

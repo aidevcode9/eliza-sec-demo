@@ -36,6 +36,13 @@ def _parse_json_like_string(value: object) -> dict[str, Any] | list[Any] | None:
     return parsed if isinstance(parsed, (dict, list)) else None
 
 
+def _coerce_nested_payload(value: object) -> dict[str, Any] | list[Any] | None:
+    """Return nested payloads whether they arrive as objects or JSON strings."""
+    if isinstance(value, (dict, list)):
+        return value
+    return _parse_json_like_string(value)
+
+
 def _looks_like_citation(item: object) -> bool:
     """Return True for citation-shaped dicts."""
     return isinstance(item, dict) and (
@@ -168,6 +175,10 @@ def _flatten_nested_payload(payload: dict[str, Any] | list[Any]) -> dict[str, An
                 sections.append(f"Comparative summary: {summary}")
             else:
                 sections.append(f"{key}:\n{summary}")
+        if not sections:
+            summary = _summarize_nested_value(payload)
+            if summary:
+                sections.append(summary)
     else:
         summary = _summarize_nested_value(payload)
         if summary:
@@ -188,7 +199,7 @@ def _flatten_nested_payload(payload: dict[str, Any] | list[Any]) -> dict[str, An
 def _normalize_multi_company_shape(parsed: dict[str, Any]) -> dict[str, Any]:
     """Recover nested multi-company outputs into the flat response contract."""
     extra_keys = [key for key in parsed if key not in _STANDARD_RESPONSE_KEYS]
-    nested_answer_payload = _parse_json_like_string(parsed.get("answer"))
+    nested_answer_payload = _coerce_nested_payload(parsed.get("answer"))
 
     nested_payload: dict[str, Any] | list[Any] | None = None
     if nested_answer_payload is not None:
