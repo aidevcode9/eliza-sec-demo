@@ -106,7 +106,7 @@ def check_negation_mismatch(response: dict, retrieved: list[dict]) -> dict:
                     f"answer {'contains' if answer_has_negation else 'lacks'} negation, "
                     f"source {'contains' if chunk_has_negation else 'lacks'} negation"
                 )
-                logger.warning(f"Negation mismatch detected with {r['chunk'].doc_name}")
+                logger.debug(f"Negation mismatch detected with {r['chunk'].doc_name}")
 
     return response
 
