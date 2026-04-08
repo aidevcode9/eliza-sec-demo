@@ -24,6 +24,7 @@ class Config:
     model_id: str = os.getenv("MODEL_ID", "gpt-5.4-mini")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
     embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "800"))
 
     # --- Retrieval ---
     top_k: int = int(os.getenv("TOP_K", "5"))

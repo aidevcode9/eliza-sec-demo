@@ -77,5 +77,39 @@
     "difficulty": "easy",
     "expected_behavior": "refusal",
     "notes": "UBER is NOT in the corpus. System must refuse rather than hallucinate. Tests cite-or-refuse on out-of-corpus company."
+  },
+  {
+    "id": "GS-008",
+    "question": "What are the primary risk factors facing Apple, Tesla, and JPMorgan, and how do they compare?",
+    "expected_answer_contains": ["Apple", "Tesla", "JPMorgan"],
+    "expected_source_doc": null,
+    "expected_page": null,
+    "expected_section": "Item 1A",
+    "category": "cross-company-comparison",
+    "difficulty": "hard",
+    "multi_chunk": true,
+    "notes": "Assignment sample question #1. 3-company cross-company comparison."
+  },
+  {
+    "id": "GS-009",
+    "question": "How has NVIDIA's revenue and growth outlook changed over the last two years?",
+    "expected_answer_contains": ["NVIDIA", "revenue"],
+    "expected_source_doc": null,
+    "expected_page": null,
+    "expected_section": "Item 7",
+    "category": "temporal-comparison",
+    "difficulty": "medium",
+    "notes": "Assignment sample question #2. Temporal comparison across multiple filings."
+  },
+  {
+    "id": "GS-010",
+    "question": "What regulatory risks do the major pharmaceutical companies face, and how are they addressing them?",
+    "expected_answer_contains": ["risk"],
+    "expected_source_doc": null,
+    "expected_page": null,
+    "expected_section": "Item 1A",
+    "category": "risk-factors",
+    "difficulty": "medium",
+    "notes": "Assignment sample question #3. Pharma regulatory risks."
   }
 ]
