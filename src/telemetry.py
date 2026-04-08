@@ -63,6 +63,7 @@ def traced_llm_call(
     model: str | None = None,
     temperature: float = 0.0,
     response_format: dict | None = None,
+    max_tokens: int | None = None,
     label: str = "llm_call",
 ) -> dict[str, Any]:
     """
@@ -82,6 +83,8 @@ def traced_llm_call(
         }
         if response_format:
             kwargs["response_format"] = response_format
+        if max_tokens:
+            kwargs["max_completion_tokens"] = max_tokens
 
         response = client.chat.completions.create(**kwargs)
         latency_ms = (time.time() - start) * 1000
