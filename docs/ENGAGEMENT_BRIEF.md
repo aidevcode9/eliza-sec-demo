@@ -88,35 +88,11 @@ If Phase 1 proves the trust bar is met, next steps would be:
 - **Scheduled corpus refresh** — batch or connector-driven updates
 - **Telemetry / monitoring hardening** — production quality and cost monitoring
 
-**Estimated Phase 2 scope:** 4–6 weeks with a small team.
+**Estimated Phase 2 scope:** 1–2 weeks.
 
 ---
 
-## 6. Panel Walkthrough Plan
-
-### Before opening the laptop
-Frame the problem in 60–90 seconds:
-- high-trust-bar use case
-- static SEC corpus
-- one-question-in / one-answer-out
-- answer must be grounded or refused
-
-### Demo
-Show three queries:
-1. a cross-company comparison
-2. a single-company business question
-3. an out-of-scope / refusal case
-
-### After the demo
-Summarize:
-- why the architecture is trustworthy
-- how the single-call constraint is enforced
-- what the eval set covered
-- what was intentionally deferred
-
----
-
-## 7. Key Decisions Summary
+## 6. Key Decisions Summary
 
 | Decision | Reasoning |
 |----------|-----------|
@@ -129,7 +105,7 @@ Summarize:
 
 ---
 
-## 8. Prompt Iteration Summary
+## 7. Prompt Iteration Summary
 
 | Version | Change | Why | Result |
 |---------|--------|-----|--------|

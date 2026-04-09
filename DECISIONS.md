@@ -482,11 +482,11 @@ Risk: External API dependency. Mitigated by dual-gating (RERANK_ENABLED + COHERE
 
 ## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
 
-## 2026-04-08 — Generation Output Length Cap (MAX_TOKENS=800)
+## 2026-04-08 — Generation Output Length Cap (MAX_TOKENS)
 
-Decision: Added MAX_TOKENS=800 to config, passed as max_completion_tokens to OpenAI API.
+Decision: Added MAX_TOKENS to config, passed as max_completion_tokens to OpenAI API. Started at 500 (truncated JSON), raised to 800 (still truncated 3-company answers), settled on 1500 for the demo.
 
-Reasoning: Uncapped generation was producing 700-900 token responses (~4.5s). Capping at 800 keeps answers complete while avoiding runaway output. 500 was too tight — truncated JSON mid-response.
+Reasoning: Uncapped generation was producing long responses (~4.5s). Capping controls latency. 500 was too tight (mid-JSON truncation). 800 worked for single-company but truncated cross-company answers with 3 tickers. 1500 accommodates the largest expected answer (3-company comparison with citations). Configurable via .env.
 
 Alternative considered: No cap — rejected due to latency. 500 — rejected, caused JSON parse failures.
 
