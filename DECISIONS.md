@@ -269,18 +269,6 @@ Risk: May refuse answers that are actually correct but marked low confidence. Ac
 
 ---
 
-## 2026-04-08 13:01 — Flat Multi-Company Output Contract
-
-Decision: Keep the response schema flat at the top level: `answer` must be plain text and all citations must live in the top-level `citations` array. Added backend normalization in `generate.py` to recover malformed nested company JSON or stringified JSON inside `answer`.
-
-Reasoning: Cross-company responses were sometimes returning nested company objects such as `{"AAPL": {...}, "PFE": {...}}` or embedding that structure as a JSON string inside `answer`. That broke the API and frontend contract because the top-level `citations` field could come back empty even when the model had produced usable support.
-
-Alternative considered: Rely on prompt wording alone. Rejected because the model had already demonstrated schema drift on real cross-company prompts. Prompt clarification plus normalization is safer.
-
-Risk: Normalization can only recover shapes that are structurally recognizable. If the model returns a different malformed format, the flat contract may still fail and should surface in tests.
-
----
-
 ## 2026-04-07 19:04 — Prompt Iteration V3-V5
 
 Decision: Evolved system prompt from V2 to V5 with cross-company formatting, confidence calibration, injection resistance, exact-quote guidance, temporal comparison instructions, and risk factor grouping.
@@ -302,6 +290,18 @@ Reasoning: Need a refusal test for an out-of-corpus company. BRK and WMT are bot
 Alternative considered: Using BRK with a specific metric ("insurance float") — rejected because BRK IS in the corpus and retrieval might return tangentially related chunks, making the test less deterministic.
 
 Risk: None — UBER is verifiably absent from the corpus.
+
+---
+
+## 2026-04-07 19:30 — Langfuse Telemetry Integration + API Tests (Phase 5)
+
+Decision: Added Langfuse tracing to telemetry.py (traced_llm_call logs generations, traced_embedding logs spans) with lazy-init client guarded by config.langfuse_enabled AND non-empty langfuse_secret_key. Added shutdown_telemetry() flush hook via FastAPI lifespan. Created 4 API endpoint tests using FastAPI TestClient with mocked dependencies.
+
+Reasoning: Langfuse provides production-grade observability (cost tracking, latency, token usage per query) with minimal code. The existing traced_llm_call/traced_embedding wrappers made integration trivial — just append Langfuse calls after existing logging. Migrated api.py from deprecated on_event to lifespan context manager. API tests validate all endpoints without requiring a real vector store or LLM.
+
+Alternative considered: OpenTelemetry + Jaeger for tracing — rejected due to heavier setup and no managed UI. Keeping on_event handlers — rejected since FastAPI deprecation warnings signal future removal.
+
+Risk: Langfuse cloud dependency for demo if keys are configured. Mitigated by guard: no keys = no Langfuse calls, in-memory telemetry (/v1/telemetry) always works as fallback.
 
 ---
 
@@ -385,20 +385,6 @@ At 2000-char chunks, fact-heavy sentences (revenue figures, specific metrics) la
 
 ---
 
----
-
-## 2026-04-07 20:00 — Langfuse Telemetry Integration + API Tests (Phase 5)
-
-Decision: Added Langfuse tracing to telemetry.py (traced_llm_call logs generations, traced_embedding logs spans) with lazy-init client guarded by config.telemetry_enabled AND non-empty langfuse_secret_key. Added shutdown_telemetry() flush hook via FastAPI lifespan. Created 4 API endpoint tests using FastAPI TestClient with mocked dependencies.
-
-Reasoning: Langfuse provides production-grade observability (cost tracking, latency, token usage per query) with minimal code. The existing traced_llm_call/traced_embedding wrappers made integration trivial — just append Langfuse calls after existing logging. Migrated api.py from deprecated on_event to lifespan context manager. API tests validate all endpoints without requiring a real vector store or LLM.
-
-Alternative considered: OpenTelemetry + Jaeger for tracing — rejected due to heavier setup and no managed UI. Keeping on_event handlers — rejected since FastAPI deprecation warnings signal future removal.
-
-Risk: Langfuse cloud dependency for demo if keys are configured. Mitigated by guard: no keys = no Langfuse calls, in-memory telemetry (/v1/telemetry) always works as fallback.
-
----
-
 ## 2026-04-07 21:00 — Eval Runner Fixes (Phase 6)
 
 Decision: Five fixes to evals/runner.py: (1) Handle expected_behavior="refusal" in golden set — GS-013 now correctly passes when system refuses. (2) Accept confidence="low" as soft refusal in adversarial checks — matches generate.py backstop that flags but doesn't force answer=null. (3) Add per-question latency_ms tracking from _telemetry metadata, with avg latency in report. (4) Skip questions whose expected_source_doc ticker isn't in loaded chunks (MSFT, ABBV) rather than counting as failures. (5) Filled engagement brief section 4 with real eval numbers.
@@ -456,6 +442,18 @@ Cache responses for known demo questions (the 3 panel demo questions + golden se
 
 ---
 
+## 2026-04-08 13:01 — Flat Multi-Company Output Contract
+
+Decision: Keep the response schema flat at the top level: `answer` must be plain text and all citations must live in the top-level `citations` array. Added backend normalization in `generate.py` to recover malformed nested company JSON or stringified JSON inside `answer`.
+
+Reasoning: Cross-company responses were sometimes returning nested company objects such as `{"AAPL": {...}, "PFE": {...}}` or embedding that structure as a JSON string inside `answer`. That broke the API and frontend contract because the top-level `citations` field could come back empty even when the model had produced usable support.
+
+Alternative considered: Rely on prompt wording alone. Rejected because the model had already demonstrated schema drift on real cross-company prompts. Prompt clarification plus normalization is safer.
+
+Risk: Normalization can only recover shapes that are structurally recognizable. If the model returns a different malformed format, the flat contract may still fail and should surface in tests.
+
+---
+
 ## 2026-04-08 18:30 — Round-Robin Interleave for Multi-Company Retrieval
 
 Decision: Replace global score re-ranking with round-robin interleave in `_multi_company_retrieve()`. After per-ticker retrieval, alternate picks from each ticker's result list instead of sorting all results by score and taking top-k.
@@ -480,9 +478,7 @@ Risk: External API dependency. Mitigated by dual-gating (RERANK_ENABLED + COHERE
 
 ---
 
-## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
-
-## 2026-04-08 — Generation Output Length Cap (MAX_TOKENS)
+## 2026-04-08 19:30 — Generation Output Length Cap (MAX_TOKENS=1500)
 
 Decision: Added MAX_TOKENS to config, passed as max_completion_tokens to OpenAI API. Started at 500 (truncated JSON), raised to 800 (still truncated 3-company answers), settled on 1500 for the demo.
 
@@ -494,7 +490,7 @@ Risk: Complex cross-company answers may truncate. Tunable via .env.
 
 ---
 
-## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
+## 2026-04-08 20:00 — Documentation Reconciliation for Demo Snapshot
 
 Decision: Align README, CLAUDE.md, and ENGAGEMENT_BRIEF.md to the final demo configuration: no hard RRF threshold, section/date-based citations, and scoped demo evaluation set.
 
