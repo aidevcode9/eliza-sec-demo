@@ -45,6 +45,9 @@ Sections are sub-chunked at the demo configuration size with overlap. Each chunk
 ### No Hard RRF Threshold
 `CONFIDENCE_THRESHOLD=0.0` in the demo build. RRF is a ranking signal, not a calibrated confidence score, so hard filtering is deferred until broader post-demo evaluation.
 
+### Cohere Rerank (second stage)
+After RRF fusion produces ~20-50 candidates, Cohere rerank-v3.5 rescores each (query, chunk) pair and reorders by relevance. This catches facts that BM25 and vector search both miss — e.g., a revenue figure buried in a chunk whose embedding is dominated by surrounding text. Adds ~300ms per query. Dual-gated: requires `RERANK_ENABLED=true` and a valid `COHERE_API_KEY`. Falls back gracefully to RRF-only on any failure.
+
 ---
 
 ## Generation (src/generate.py)

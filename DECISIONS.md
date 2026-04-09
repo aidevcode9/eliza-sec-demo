@@ -468,6 +468,18 @@ Risk: Lower-scoring chunks from one ticker may displace higher-scoring chunks fr
 
 ---
 
+## 2026-04-08 19:00 — Cohere Rerank Integration
+
+Decision: Add Cohere Rerank (rerank-v3.5) as a second-stage reranker after BM25+vector RRF fusion. Reranker scores (query, chunk) pairs directly and reorders results by relevance before final selection.
+
+Reasoning: All 4 retrieval quality failures (NVDA revenue, AMZN revenue, JPM financials, XOM revenue) shared the same root cause: the right chunk existed but didn't rank in top-5 after RRF fusion because its embedding was dominated by surrounding content. The reranker sees the full chunk text alongside the query and catches semantic matches that embedding similarity misses. NVDA revenue went from "Insufficient evidence" to "$130.5 billion, high confidence" with this single change.
+
+Alternative considered: Local cross-encoder model (sentence-transformers) — rejected because it requires downloading an 80MB model and adds ~500ms latency. Cohere API is ~300ms, no model download, and the free tier is sufficient for demo. Also considered: no reranker, just improve chunk size — rejected because we already reduced to 1000 chars and the issue persists for some filings.
+
+Risk: External API dependency. Mitigated by dual-gating (RERANK_ENABLED + COHERE_API_KEY) and graceful fallback — any Cohere failure returns original RRF order with a warning log.
+
+---
+
 ## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
 
 ## 2026-04-08 — Generation Output Length Cap (MAX_TOKENS=800)
