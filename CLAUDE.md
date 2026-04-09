@@ -22,9 +22,10 @@
 User Question
   → Injection check (basic prompt injection filter)
   → Embed query (text-embedding-3-large)
-  → Retrieve (hybrid: BM25 + vector + RRF, top-k)
-  → Generate answer (single LLM call, flat JSON output + top-level citations)
-  → Citation validation (if enabled)
+  → Retrieve (hybrid: BM25 + vector + RRF)
+  → Rerank (Cohere rerank-v3.5, optional)
+  → Generate answer (single LLM call, flat JSON + top-level citations)
+  → Citation validation
   → Return answer + citations OR refusal
 ```
 
@@ -117,6 +118,41 @@ Result: [observed impact]
 
 ---
 
+## Subagent Protocol
+
+Every feature or change follows this pipeline. No skipping steps.
+
+| Agent | When to spawn |
+|-------|---------------|
+| `researcher` | Before implementing any new feature. Gathers context, buy-vs-build check. |
+| `eval-writer` | When touching retrieval, generation, or citation logic. Verify eval coverage. |
+| `coder` | After research brief. Write tests first (RED), implement (GREEN). Update DECISIONS.md and PROMPT_LOG.md. |
+| `skeptic` | Before declaring done. Adversarial review: hallucination risks, citation gaps, refusal failures. Verdict: SHIP / FIX FIRST / BLOCK. |
+| `verifier` | After implementation. Runs lint + tests + eval suite. Checks docs are current. PASS / FAIL. |
+
+Workflow order: **researcher → eval-writer → coder → skeptic → verifier**
+
+---
+
+## Auto-Trigger Protocol
+
+### Before ANY implementation
+1. Read this file
+2. Read `STATUS.md` — what phase are we in?
+3. Read `REQUIREMENTS.md` — what are the acceptance criteria?
+4. Check `evals/golden_set.json` — is it populated?
+5. Check DECISIONS.md — is it current?
+
+### Before ANY PR or "done" declaration
+1. Run `uv run python -m evals.runner` — must show pass rate
+2. Run `uv run ruff check src/` — must pass
+3. Run `uv run pytest tests/ -v` — must pass
+4. Check: does every answer path produce citations or a refusal?
+5. Verify DECISIONS.md has been updated since the last code change.
+6. Verify PROMPT_LOG.md reflects the current prompt in prompts.py.
+
+---
+
 ## SEC Filing Specifics
 
 ### Corpus
@@ -129,6 +165,11 @@ Result: [observed impact]
 - Primary: chunk by SEC section boundaries (Item 1, Item 1A, Item 7, etc.)
 - Secondary: sub-chunk large sections with overlap
 - Every chunk carries metadata: ticker, filing_type, filing_date, section_name
+
+### Sample questions (from assignment)
+- "What are the primary risk factors facing Apple, Tesla, and JPMorgan, and how do they compare?"
+- "How has NVIDIA's revenue and growth outlook changed over the last two years?"
+- "What regulatory risks do the major pharmaceutical companies face, and how are they addressing them?"
 
 ### Citation style
 - Cite by **ticker, filing type, filing date, and section**
@@ -158,7 +199,7 @@ mkdir -p data
 unzip edgar_corpus.zip -d data/
 
 uv run python -m src.ingest
-uv run python evals/runner.py
+uv run python -m evals.runner
 uv run uvicorn src.api:app --reload --port 8000
 uv run streamlit run frontend/app.py
 ```

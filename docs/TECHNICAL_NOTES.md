@@ -97,6 +97,35 @@ All model and embedding calls flow through traced wrappers. Optional Langfuse in
 
 ---
 
+## Development Workflow
+
+### Subagent Pipeline
+Every feature follows: **researcher → eval-writer → coder → skeptic → verifier**. Each agent has a defined role (see `.claude/agents/`). The researcher gathers context and does buy-vs-build assessment. The eval-writer verifies test coverage before code changes. The coder writes tests first (RED → GREEN). The skeptic does adversarial review. The verifier runs all quality checks. No steps are skipped.
+
+### Testing (57 tests, 6 files)
+
+| File | Tests | What's covered |
+|------|-------|---------------|
+| test_ingest.py | 11 | Metadata parsing, XBRL stripping, filename parsing, section splitting, sub-chunking, persistence |
+| test_retrieve.py | 24 | BM25 scoring, RRF fusion, tokenization, ticker detection, RetrievalIndex, vector search, multi-company, neighbor expansion |
+| test_pipeline.py | 6 | Injection detection, refusal structure, null content handling |
+| test_generate.py | 4 | Nested JSON normalization for multi-company responses |
+| test_validate.py | 8 | Jaccard similarity, substring matching, citation validation |
+| test_api.py | 4 | FastAPI endpoints (healthz, ask, telemetry) |
+
+All tests use synthetic fixtures or mocks — no API calls required. Run with `uv run pytest tests/ -v`.
+
+### Evaluation (17 questions)
+
+| Set | Count | What's checked |
+|-----|-------|---------------|
+| Golden set | 10 | Answer content (fuzzy number matching), source document (ticker-based), confidence, latency |
+| Adversarial | 7 | Refusal behavior for injection, out-of-scope, speculative, scope-overflow |
+
+The eval runner (`uv run python -m evals.runner`) runs the full pipeline end-to-end against the ingested corpus. Citation validation (Jaccard) is logged but not in the pass/fail criteria (deferred to Phase 2 for metric improvement). Pass threshold: 80% golden set.
+
+---
+
 ## Build Rationale
 
 ### Vector Search: numpy (not FAISS, pgvector, Pinecone)
