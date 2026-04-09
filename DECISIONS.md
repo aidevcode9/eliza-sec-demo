@@ -456,6 +456,16 @@ Cache responses for known demo questions (the 3 panel demo questions + golden se
 
 ---
 
+## 2026-04-08 18:30 — Round-Robin Interleave for Multi-Company Retrieval
+
+Decision: Replace global score re-ranking with round-robin interleave in `_multi_company_retrieve()`. After per-ticker retrieval, alternate picks from each ticker's result list instead of sorting all results by score and taking top-k.
+
+Reasoning: The previous approach (global sort + slice) defeated the per-ticker allocation. For "Apple, Tesla, and JPMorgan" queries, AAPL and JPM chunks consistently scored higher than TSLA chunks, pushing Tesla out of the final results entirely. Round-robin guarantees every detected ticker gets at least one chunk in the output. This reverses the earlier decision (line 254) to reject round-robin as "unnecessarily complex" — empirical testing proved it necessary.
+
+Alternative considered: Increasing per_ticker_k to compensate — rejected because the fundamental problem is the global re-sort, not the allocation count. Also considered weighted interleave by score — rejected as unnecessary complexity; simple alternation is sufficient for 2-4 tickers.
+
+Risk: Lower-scoring chunks from one ticker may displace higher-scoring chunks from another. Acceptable trade-off — balanced coverage matters more than marginal relevance for cross-company comparison questions.
+
 ---
 
 ## 2026-04-08 11:45 — Documentation Reconciliation for Demo Snapshot
