@@ -1,6 +1,6 @@
 # SEC Filing RAG — Eliza Assessment
 
-Trustworthy RAG for SEC filing analysis. Every answer includes source citations, or the system refuses.
+SEC filing analysis. Every answer includes source citations, or the system refuses.
 
 **Corpus:** 246 SEC EDGAR filings (10-K and 10-Q) from 54 major US public companies, spanning 2023–2025.
 
