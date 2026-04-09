@@ -7,6 +7,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import zip_longest
 
 import numpy as np
 
@@ -654,7 +655,7 @@ def _multi_company_retrieve(
     Per-ticker retrieval for cross-company questions.
 
     Allocates top_k slots evenly across detected tickers, retrieves
-    per-ticker, then merges and re-ranks by score.
+    per-ticker, then round-robin interleaves to guarantee balanced coverage.
     """
     # Bug 3 fix: use ceiling division to avoid losing slots
     per_ticker_k = max(2, math.ceil(top_k / len(tickers)))
@@ -696,9 +697,17 @@ def _multi_company_retrieve(
             len(fused),
         )
 
-    # Re-sort merged results by score descending
-    all_results.sort(key=lambda x: x["score"], reverse=True)
-    final_anchors = all_results[:top_k]
+    # Round-robin interleave to guarantee every ticker is represented
+    by_ticker: dict[str, list[dict]] = {}
+    for r in all_results:
+        t = r["chunk"].ticker
+        by_ticker.setdefault(t, []).append(r)
+    interleaved: list[dict] = []
+    for group in zip_longest(*by_ticker.values()):
+        for item in group:
+            if item is not None:
+                interleaved.append(item)
+    final_anchors = interleaved[:top_k]
     return _expand_adjacent_results(
         final_anchors,
         chunks,
