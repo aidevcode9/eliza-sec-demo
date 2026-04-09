@@ -38,8 +38,9 @@ uv run streamlit run frontend/app.py
 ## Architecture
 
 ```text
-Question → Injection Check → Retrieve (BM25 + Vector + RRF, top-k)
-  → Generate (single LLM call, flat JSON answer + top-level citations) → Citation Validation → Response
+Question → Injection Check → Retrieve (BM25 + Vector + RRF)
+  → Rerank (Cohere rerank-v3.5) → Generate (single LLM call, cite-or-refuse)
+  → Citation Validation → Response
 ```
 
 **Core guarantee:** Every answer cites the specific filing, company, filing date, and section. If the system cannot find sufficient evidence, it refuses.

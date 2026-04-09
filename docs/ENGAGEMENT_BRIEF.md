@@ -38,7 +38,7 @@ This was scoped as a **phase-1 proof of value**, not a full product build. The g
 | **Corpus prep** | Strip XBRL / noisy leading text, preserve filing structure | Machine-readable filing noise hurts retrieval quality |
 | **Chunking** | Section-based Item chunking with overlap | SEC filings have standard structure; section-aware chunks preserve context |
 | **Metadata** | Ticker, filing type, filing date, section name per chunk | Needed for cross-company and time-based answers |
-| **Retrieval** | Hybrid search (BM25 + vector) with RRF fusion | Lexical search catches exact terms; vector search catches meaning |
+| **Retrieval** | Hybrid search (BM25 + vector) with RRF fusion + Cohere reranker | Lexical catches exact terms, vector catches meaning, reranker rescores for precision |
 | **Refusal behavior** | No hard retrieval threshold in demo build; generator refuses when evidence is insufficient | RRF is a ranking signal, not a calibrated confidence score |
 | **Generation** | Single LLM call with flat structured output and top-level citations | Meets assignment constraint and produces inspectable answers |
 | **Citation validation** | Optional validation on cited quotes | Helps detect citation drift or hallucinated quotes |

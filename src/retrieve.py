@@ -13,7 +13,7 @@ import numpy as np
 
 from src.config import config
 from src.ingest import Chunk, load_chunks
-from src.telemetry import traced_embedding
+from src.telemetry import traced_embedding, traced_rerank
 
 logger = logging.getLogger(__name__)
 
@@ -615,6 +615,33 @@ def retrieve(
     return _single_retrieve(query, chunks, top_k, threshold, index)
 
 
+# ---------------------------------------------------------------------------
+# Cohere Rerank
+# ---------------------------------------------------------------------------
+
+
+def _rerank_results(query: str, results: list[dict], top_n: int | None = None) -> list[dict]:
+    """Rerank retrieval results using Cohere. Falls back to original order on failure."""
+    if not config.rerank_enabled or not config.cohere_api_key:
+        return results
+    if not results:
+        return results
+    top_n = top_n or len(results)
+    try:
+        documents = [r["chunk"].text for r in results]
+        reranked = traced_rerank(query, documents, top_n=min(top_n, len(documents)))
+        reordered = []
+        for item in reranked:
+            r = results[item["index"]]
+            r["score"] = item["relevance_score"]
+            r["method"] = "reranked"
+            reordered.append(r)
+        return reordered
+    except Exception as e:
+        logger.warning("Rerank failed, using original order: %s", e)
+        return results
+
+
 def _single_retrieve(
     query: str,
     chunks: list[Chunk],
@@ -632,6 +659,7 @@ def _single_retrieve(
     )
     bm25_results = _bm25_search(query, chunks, candidate_pool, index)
     fused = _rrf_fuse(vector_results, bm25_results, k=60)
+    fused = _rerank_results(query, fused)
     results = _finalize_results(fused, chunks, top_k, threshold)
 
     logger.info(
@@ -685,6 +713,7 @@ def _multi_company_retrieve(
         )
         bm25_results = _bm25_search(query, scoped_chunks, candidate_pool, sub_index)
         fused = _rrf_fuse(vector_results, bm25_results, k=60)
+        fused = _rerank_results(query, fused)
 
         # Take per_ticker_k from this company
         ticker_results = _select_anchor_results(fused, per_ticker_k, threshold)
