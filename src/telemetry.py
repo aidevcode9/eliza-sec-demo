@@ -175,6 +175,54 @@ def traced_embedding(texts: list[str], label: str = "embed") -> list[list[float]
 
 
 # ---------------------------------------------------------------------------
+# Traced rerank (Cohere)
+# ---------------------------------------------------------------------------
+
+_cohere_client: Any | None = None
+
+
+def get_cohere_client() -> Any:
+    """Lazy-init Cohere client."""
+    global _cohere_client
+    if _cohere_client is None:
+        import cohere
+        _cohere_client = cohere.ClientV2(api_key=config.cohere_api_key)
+    return _cohere_client
+
+
+def traced_rerank(
+    query: str,
+    documents: list[str],
+    top_n: int = 20,
+    label: str = "rerank",
+) -> list[dict[str, Any]]:
+    """Rerank documents with Cohere. Returns list of {index, relevance_score}."""
+    client = get_cohere_client()
+    start = time.time()
+
+    response = client.rerank(
+        query=query,
+        documents=documents,
+        top_n=min(top_n, len(documents)),
+        model=config.rerank_model,
+    )
+    latency_ms = (time.time() - start) * 1000
+
+    results = [
+        {"index": r.index, "relevance_score": r.relevance_score}
+        for r in response.results
+    ]
+    logger.info("[%s] Reranked %d docs → top %d — %.0fms", label, len(documents), top_n, latency_ms)
+    _call_log.append({
+        "label": label,
+        "count": len(documents),
+        "top_n": top_n,
+        "latency_ms": round(latency_ms, 1),
+    })
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Call log accessors
 # ---------------------------------------------------------------------------
 

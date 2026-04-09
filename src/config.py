@@ -52,5 +52,10 @@ class Config:
     langfuse_public_key: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     langfuse_host: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
+    # --- Cohere Rerank ---
+    cohere_api_key: str = os.getenv("COHERE_API_KEY", "")
+    rerank_enabled: bool = os.getenv("RERANK_ENABLED", "true").lower() == "true"
+    rerank_model: str = os.getenv("RERANK_MODEL", "rerank-v3.5")
+
 
 config = Config()
