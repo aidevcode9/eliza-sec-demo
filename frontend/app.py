@@ -69,13 +69,19 @@ def _render_card(title: str, body: str | None = None, card_class: str = "") -> N
     )
 
 
+def _render_retrieval_preview(text: str) -> None:
+    """Render retrieval previews as literal text, not markdown/math."""
+    st.markdown(
+        f'<div class="retrieval-preview">{html.escape(text).replace(chr(10), "<br>")}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_citation(citation: dict, number: int) -> None:
     """Render a human-readable citation card."""
     badge_parts = []
     if "valid" in citation:
         badge_parts.append("Validated" if citation.get("valid") else "Needs review")
-    if citation.get("jaccard_score") is not None:
-        badge_parts.append(f"Jaccard {citation['jaccard_score']:.2f}")
 
     meta = " | ".join(
         part
@@ -94,8 +100,10 @@ def render_citation(citation: dict, number: int) -> None:
         footer_parts.append(str(citation["doc_name"]))
     if badge_parts:
         footer_parts.append(" | ".join(badge_parts))
-    if citation.get("validation_note"):
-        footer_parts.append(str(citation["validation_note"]))
+    if citation.get("valid") is True:
+        footer_parts.append("Source quote verified")
+    elif citation.get("valid") is False:
+        footer_parts.append("Source quote may need manual review")
 
     footer_html = ""
     if footer_parts:
@@ -319,9 +327,8 @@ def render_response(response: dict) -> None:
                     if part
                 )
                 st.markdown(f"**{meta or item.get('doc_name', 'Retrieved chunk')}**")
-                st.caption(f"Score: {item.get('score', '?')}")
                 if item.get("text_preview"):
-                    st.write(item["text_preview"])
+                    _render_retrieval_preview(str(item["text_preview"]))
 
 
 def main() -> None:
@@ -407,8 +414,24 @@ def main() -> None:
             border: 1px solid #ddd6c7;
             border-radius: 20px;
         }
+        [data-testid="stExpander"] details summary {
+            background: #efe6d8 !important;
+            border-radius: 16px !important;
+            padding: 0.35rem 0.75rem !important;
+            transition: background-color 0.18s ease, color 0.18s ease;
+        }
+        [data-testid="stExpander"] details summary:hover {
+            background: #e4d8c4 !important;
+        }
+        [data-testid="stExpander"] details[open] summary {
+            background: #14584f !important;
+        }
         [data-testid="stExpander"] * {
             color: #1f2223 !important;
+        }
+        [data-testid="stExpander"] details[open] summary,
+        [data-testid="stExpander"] details[open] summary * {
+            color: #ffffff !important;
         }
         .hero-copy {
             padding: 0.25rem 0 1rem 0;
@@ -471,6 +494,14 @@ def main() -> None:
             line-height: 1.6;
             margin: -0.2rem 0 0.8rem 0;
             max-width: 50rem;
+        }
+        .retrieval-preview {
+            color: #252927;
+            font-size: 0.98rem;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0.35rem 0 1rem 0;
         }
         .result-card {
             background: rgba(255, 255, 255, 0.94);
