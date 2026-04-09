@@ -143,9 +143,9 @@ _Select and test 3 questions for the live walkthrough._
 
 | Slot | Question | Tested | Result |
 |------|----------|--------|--------|
-| Cross-company | What are the primary risk factors facing Apple, Tesla, and JPMorgan, and how do they compare? | ✅ | Cited AAPL, TSLA, JPM Item 1A with comparative summary |
-| Single-company | How has NVIDIA's revenue and growth outlook changed over the last two years? | ✅ | Cited NVDA 10-K FY2022-2025, high confidence |
-| Refusal / fallback | What regulatory risks do the major pharmaceutical companies face, and how are they addressing them? | ✅ | Cited PFE Item 1A/7, high confidence |
+| Cross-company | What are the primary risk factors facing Apple, Tesla, and JPMorgan, and how do they compare? | Yes | Cited AAPL, TSLA, JPM Item 1A with comparative summary |
+| Single-company | How has NVIDIA's revenue and growth outlook changed over the last two years? | Yes | Cited NVDA 10-K FY2022-2025, high confidence |
+| Refusal / fallback | What is the current stock price of NVIDIA? | Yes | Correctly refused - not answerable from SEC filings |
 
 ---
 

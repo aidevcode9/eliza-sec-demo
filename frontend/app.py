@@ -69,6 +69,32 @@ def _render_card(title: str, body: str | None = None, card_class: str = "") -> N
     )
 
 
+def _render_top_stat_pills(chunks: list[Chunk]) -> None:
+    """Render compact top-of-page stats without dominating the layout."""
+    file_count = len({chunk.doc_name for chunk in chunks})
+    stats = [
+        ("Files loaded", f"{file_count:,}"),
+        ("Chunks loaded", f"{len(chunks):,}"),
+        ("Model", config.model_id),
+    ]
+    pills = "".join(
+        f"""
+        <div class="top-stat-pill">
+            <span class="top-stat-label">{html.escape(label)}</span>
+            <span class="top-stat-value">{html.escape(value)}</span>
+        </div>
+        """
+        for label, value in stats
+    )
+    st.markdown(
+        f"""
+        <div class="top-stat-row">{pills}</div>
+        <div class="top-stat-note">Retrieval depth: top {config.top_k} evidence chunks per question.</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_retrieval_preview(text: str) -> None:
     """Render retrieval previews as literal text, not markdown/math."""
     st.markdown(
@@ -462,6 +488,42 @@ def main() -> None:
             line-height: 1.6;
             margin: 0 0 1rem 0;
         }
+        .top-stat-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+            margin: 0.2rem 0 1rem 0;
+        }
+        .top-stat-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid #ddd6c7;
+            box-shadow: 0 10px 24px rgba(43, 37, 24, 0.06);
+        }
+        .top-stat-label {
+            color: #6d726f;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .top-stat-value {
+            color: #1f2223;
+            font-size: 0.92rem;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+        .top-stat-note {
+            color: #6d726f;
+            font-size: 0.83rem;
+            line-height: 1.5;
+            margin: -0.55rem 0 1rem 0.2rem;
+        }
         .confidence-guide {
             background: rgba(255, 255, 255, 0.92);
             color: #1f2223;
@@ -658,10 +720,7 @@ def main() -> None:
         st.exception(exc)
         st.stop()
 
-    metrics = st.columns(3)
-    metrics[0].metric("Chunks loaded", f"{len(chunks):,}")
-    metrics[1].metric("Top K", config.top_k)
-    metrics[2].metric("Model", config.model_id)
+    _render_top_stat_pills(chunks)
 
     st.session_state.setdefault("question_input", EXAMPLE_QUESTIONS["Single-company"])
     st.session_state.setdefault("last_response", None)
