@@ -1,7 +1,7 @@
 # SEC Filing Intelligence — Phase 1 Engagement Brief
 
 **Prepared by:** Chuck Hernandez  
-**Date:** April 10, 2026  
+**Date:** April 7, 2026  
 **Client:** Panel simulates a PE firm or investment team  
 **Engagement type:** Phase 1 — Proof of Value
 
